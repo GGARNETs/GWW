@@ -100,12 +100,13 @@ public class PuzzleEntityChecker {
                     : AnomalyResult.NONE;
         });
 
-        // Interruptor industrial apagado
+        // Interruptor industrial encendido: apagado es su estado normal, encender la
+        // luz es precisamente lo que delata a los jugadores.
         registerChecker((level, area) -> {
             boolean found = level.getEntitiesOfClass(InterruptorIndustrialEntity.class, area).stream()
-                    .anyMatch(interruptor -> !interruptor.isOn());
+                    .anyMatch(InterruptorIndustrialEntity::isOn);
             return found
-                    ? AnomalyResult.detected("§e¡Un interruptor industrial está apagado!")
+                    ? AnomalyResult.detected("§e¡Un interruptor industrial está encendido!")
                     : AnomalyResult.NONE;
         });
 

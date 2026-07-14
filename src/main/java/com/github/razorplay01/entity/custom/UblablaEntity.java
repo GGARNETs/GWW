@@ -1,5 +1,7 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.arena.ArenaManager;
+import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.entity.custom.util.EscapeRoomPersistable;
 import com.github.razorplay01.entity.custom.util.PuzzleEntityChecker;
 import com.github.razorplay01.system.NoiseDetectionSystem;
@@ -50,12 +52,10 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     public static final int STATE_ATTACKING = 4;
     public static final int STATE_CHECKING = 5;
 
-    private static final int ALERT_DURATION = 100;
+    // Los tiempos de alerta / revisión / investigación y el umbral de ruido salen
+    // de config/GWW/settings.yml (GwwSettings), comunes a todas las arenas.
     private static final int CHASE_MAX_DURATION = 200;
-    private static final int CHECK_WAIT_DURATION = 60;
-    private static final int INVESTIGATION_TIMEOUT = 300;
     private static final int NOISE_CHECK_INTERVAL = 12;
-    private static final float NOISE_THRESHOLD = 0.72f;
     private static final double CATCH_DISTANCE_SQ = 5.29;
     private static final double LOSE_TARGET_DISTANCE_SQ = 2500.0;
 
@@ -217,6 +217,19 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         super.tick();
         if (level().isClientSide) return;
 
+        // Mientras la arena no esté en marcha (/escaperoom start) el Ublabla no
+        // patrulla, no oye y no persigue: se queda plantado en su puesto.
+        if (ArenaManager.isInsideStoppedArena(this.position())) {
+            if (!isNoAi()) {
+                resetToPatrol();
+                setNoAi(true);
+            }
+            return;
+        }
+        if (isNoAi()) {
+            setNoAi(false);
+        }
+
         decrementCooldowns();
 
         switch (getState()) {
@@ -249,7 +262,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         noiseCheckCooldown = NOISE_CHECK_INTERVAL;
         float noise = getHighestGroupNoise();
 
-        if (noise > NOISE_THRESHOLD) {
+        if (noise > GwwSettings.noiseThreshold()) {
             setState(STATE_ALERT);
             alertTimer = 0;
             broadcastMessage("¿Qué ha sido eso?");
@@ -258,7 +271,8 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
 
     private void tickAlert() {
         alertTimer++;
-        int remainingSeconds = (ALERT_DURATION - alertTimer) / 20;
+        int alertDuration = GwwSettings.alertTicks();
+        int remainingSeconds = (alertDuration - alertTimer) / 20;
 
         if (remainingSeconds > 0) {
             showActionBarMessage("§eUblabla viene en camino... §c" + remainingSeconds + "s");
@@ -266,7 +280,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
             showActionBarMessage("§c¡Ublabla está aquí!");
         }
 
-        if (alertTimer < ALERT_DURATION) return;
+        if (alertTimer < alertDuration) return;
 
         if (investigationTarget != null) {
             setState(STATE_INVESTIGATING);
@@ -285,12 +299,12 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         if (investigationTarget != null && this.position().distanceToSqr(Vec3.atCenterOf(investigationTarget)) <= 2.25) {
             setState(STATE_CHECKING);
             getNavigation().stop();
-            checkWaitTimer = CHECK_WAIT_DURATION;
+            checkWaitTimer = GwwSettings.checkTicks();
             broadcastMessage("Voy a revisar esto con atención...");
             return;
         }
 
-        if (investigationTimer > INVESTIGATION_TIMEOUT) {
+        if (investigationTimer > GwwSettings.investigationTimeoutTicks()) {
             broadcastMessage("No encuentro el lugar... mejor me retiro.");
             resetToPatrol();
         }

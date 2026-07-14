@@ -1,13 +1,14 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.arena.Arena;
+import com.github.razorplay01.arena.ArenaLight;
+import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.entity.custom.util.Util;
 import lombok.Getter;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -65,35 +66,13 @@ public class InterruptorIndustrialEntity extends BaseEntity {
             panel.setPowered(nowOn); // ON → encendido, OFF → apagado
         }
 
-        applyBlindness(!nowOn);
-    }
-
-
-    private void applyBlindness(boolean apply) {
-        UblablaEntity ublabla = getLinkedUblabla();
-        if (ublabla == null) {
-            return;
-        }
-
-        Vec3 patrolCenter = ublabla.getPatrolCenter();
-        double patrolRadius = ublabla.getPatrolRadius();
-        if (patrolCenter == null) return;
-
-        AABB region = new AABB(
-                patrolCenter.x - patrolRadius,
-                patrolCenter.y - 30,
-                patrolCenter.z - patrolRadius,
-                patrolCenter.x + patrolRadius,
-                patrolCenter.y + 30,
-                patrolCenter.z + patrolRadius
-        );
-
-        List<Player> players = this.level().getEntitiesOfClass(Player.class, region);
-        for (Player player : players) {
-            if (apply) {
-                player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, -1, 0, false, false, true));
-            } else {
-                player.removeEffect(MobEffects.BLINDNESS);
+        // Accionar el interruptor es uno de los dos únicos momentos en los que la luz
+        // puede cambiar. El otro (alguien entra o sale de la arena) lo lleva
+        // ArenaManager, así que aquí no hace falta comprobar nada por tick.
+        if (!this.level().isClientSide) {
+            Arena arena = ArenaManager.getArenaAt(this.position());
+            if (arena != null) {
+                ArenaLight.refresh(this.level(), arena, nowOn);
             }
         }
     }
@@ -137,26 +116,10 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         if (ublabla == null) return;
         linkedUblablas.clear();
         linkedUblablas.add(ublabla.position().subtract(this.position()));
-        if (!isOn()) {
-            applyBlindness(true);
-        }
     }
 
     public void unlinkUblabla() {
-        if (!isOn()) {
-            applyBlindness(false);
-        }
         linkedUblablas.clear();
-    }
-
-    private UblablaEntity getLinkedUblabla() {
-        if (linkedUblablas.isEmpty()) return null;
-        Vec3 relPos = linkedUblablas.get(0);
-        Vec3 expectedPos = this.position().add(relPos);
-        List<UblablaEntity> found = this.level().getEntitiesOfClass(UblablaEntity.class,
-                AABB.ofSize(expectedPos, 5, 5, 5),
-                u -> u.position().distanceToSqr(expectedPos) < 1.5);
-        return found.isEmpty() ? null : found.get(0);
     }
 
     public void linkPanel(PanelCodigoEntity panel) {
@@ -213,8 +176,6 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         linkedUblablas.addAll(Util.loadLinkedList(tag, "LinkedUblablas"));
         linkedPanels.clear();
         linkedPanels.addAll(Util.loadLinkedList(tag, "LinkedPanels"));
-
-        applyBlindness(!isOn());
     }
 
     public static AttributeSupplier.Builder setAttributes() {

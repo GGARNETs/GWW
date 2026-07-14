@@ -12,7 +12,6 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
@@ -75,8 +74,9 @@ public class CajaEntity extends BaseEntity {
         if (open && !this.level().isClientSide) {
             openAnimationTicks = 0;
             this.level().playSound(null, this.blockPosition(), SoundEvents.CHEST_OPEN, SoundSource.BLOCKS, 1.0F, 1.0F);
-            Player nearestPlayer = this.level().getNearestPlayer(this, 20.0D);
-            NoiseDetectionSystem.addNoise((ServerPlayer) nearestPlayer, 1.0f);
+            // La caja no la abre nadie con la mano, salta por una colisión: el ruido
+            // se le apunta al jugador jugable más cercano.
+            NoiseDetectionSystem.addNoiseNearby(this, 20.0D, 1.0f);
         }
     }
 
@@ -274,7 +274,9 @@ public class CajaEntity extends BaseEntity {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        setOpen(tag.getBoolean("IsOpen"));
+        // Directo al dato, sin pasar por setOpen: una caja que ya estaba abierta al
+        // guardarse no debe sonar ni generar ruido al volver a cargarse.
+        this.entityData.set(IS_OPEN, tag.getBoolean("IsOpen"));
         itemsSpawned = tag.getBoolean("ItemsSpawned");
 
         var provider = this.level().registryAccess();

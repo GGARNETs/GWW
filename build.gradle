@@ -26,6 +26,7 @@ dependencies {
     // Fabric API. This is technically optional, but you probably want it anyway.
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     implementation(include("com.github.RazorPlay01:PacketHandler:1.3.0"))
+    implementation(include("org.yaml:snakeyaml:2.2"))
     compileOnly("org.projectlombok:lombok:1.18.44")
     annotationProcessor("org.projectlombok:lombok:1.18.44")
 

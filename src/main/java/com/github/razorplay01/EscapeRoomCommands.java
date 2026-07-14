@@ -1,80 +1,114 @@
 package com.github.razorplay01;
 
-import com.github.razorplay01.EscapeRoomManager.EscapeRoomData;
+import com.github.razorplay01.arena.Arena;
+import com.github.razorplay01.arena.ArenaLight;
+import com.github.razorplay01.arena.ArenaManager;
+import com.github.razorplay01.config.GwwSettings;
+import com.github.razorplay01.entity.custom.UblablaEntity;
+import com.github.razorplay01.instance.Instance;
+import com.github.razorplay01.instance.InstanceManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 
-import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Comandos del sistema de instances: capturar una sala, guardarla como si fuera
+ * una schematic y pegarla donde haga falta (suelta o a través de una arena).
+ */
 public class EscapeRoomCommands {
     private EscapeRoomCommands() {
         /* This utility class should not be instantiated */
     }
 
-    private static final Map<String, EscapeRoomData> loadedRooms = new HashMap<>();
+    /** Última captura hecha con /escaperoom capture, a la espera de un /escaperoom save. */
+    private static Instance clipboard;
+
+    private static final SuggestionProvider<CommandSourceStack> INSTANCE_NAMES =
+            (ctx, builder) -> SharedSuggestionProvider.suggest(InstanceManager.getNames(), builder);
+
+    private static final SuggestionProvider<CommandSourceStack> ARENA_IDS =
+            (ctx, builder) -> SharedSuggestionProvider.suggest(ArenaManager.getIds(), builder);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("escaperoom")
                 .requires(source -> source.hasPermission(2))
 
-                // Capturar área
+                // Capturar la sala alrededor del jugador (queda en el portapapeles)
                 .then(Commands.literal("capture")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
-                                        .executes(EscapeRoomCommands::capture)
-                                )
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
+                                .executes(EscapeRoomCommands::capture)
                         )
                 )
 
-                // Guardar en archivo
+                // Guardar el portapapeles como instance
                 .then(Commands.literal("save")
-                        .then(Commands.argument("name", StringArgumentType.string())
+                        .then(Commands.argument("instance", StringArgumentType.word())
+                                .suggests(INSTANCE_NAMES)
                                 .executes(EscapeRoomCommands::save)
                         )
                 )
 
-                // Cargar desde archivo
-                .then(Commands.literal("load")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .executes(EscapeRoomCommands::load)
+                // Borrar una instance del disco
+                .then(Commands.literal("delete")
+                        .then(Commands.argument("instance", StringArgumentType.word())
+                                .suggests(INSTANCE_NAMES)
+                                .executes(EscapeRoomCommands::delete)
                         )
                 )
 
-                // Pegar en posición actual del jugador
+                // Pegar en la posición actual del jugador
                 .then(Commands.literal("paste")
-                        .then(Commands.argument("name", StringArgumentType.string())
+                        .then(Commands.argument("instance", StringArgumentType.word())
+                                .suggests(INSTANCE_NAMES)
                                 .executes(EscapeRoomCommands::paste)
                         )
                 )
 
                 // Pegar en coordenadas específicas
                 .then(Commands.literal("pasteat")
-                        .then(Commands.argument("name", StringArgumentType.string())
+                        .then(Commands.argument("instance", StringArgumentType.word())
+                                .suggests(INSTANCE_NAMES)
                                 .then(Commands.argument("pos", BlockPosArgument.blockPos())
                                         .executes(EscapeRoomCommands::pasteAt)
                                 )
                         )
                 )
 
-                // Limpiar área
+                // Listar instances guardadas
+                .then(Commands.literal("list")
+                        .executes(EscapeRoomCommands::list)
+                )
+
+                // Información detallada de una instance
+                .then(Commands.literal("info")
+                        .then(Commands.argument("instance", StringArgumentType.word())
+                                .suggests(INSTANCE_NAMES)
+                                .executes(EscapeRoomCommands::info)
+                        )
+                )
+
+                // Limpiar entidades alrededor del jugador
                 .then(Commands.literal("clear")
                         .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
                                 .executes(EscapeRoomCommands::clear)
                         )
                 )
 
-                // Limpiar en coordenadas específicas
+                // Limpiar entidades en coordenadas específicas
                 .then(Commands.literal("clearat")
                         .then(Commands.argument("pos", BlockPosArgument.blockPos())
                                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
@@ -83,395 +117,570 @@ public class EscapeRoomCommands {
                         )
                 )
 
-                // Listar escape rooms cargados
-                .then(Commands.literal("list")
-                        .executes(EscapeRoomCommands::list)
-                )
-
-                // Información detallada de un escape room
-                .then(Commands.literal("info")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .executes(EscapeRoomCommands::info)
+                // Arrancar la partida de una arena (barra de ruido + Ublablas), o de todas
+                .then(Commands.literal("start")
+                        .then(Commands.literal("all")
+                                .executes(context -> setRunningAll(context, true))
+                        )
+                        .then(Commands.argument("arena", StringArgumentType.word())
+                                .suggests(ARENA_IDS)
+                                .executes(context -> setRunning(context, true))
                         )
                 )
 
-                // Subcomandos para instancias
-                .then(Commands.literal("instance")
-                        .then(Commands.literal("add")
-                                .then(Commands.argument("roomname", StringArgumentType.string())
-                                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
-                                                .executes(EscapeRoomCommands::instanceAdd))))
-                        .then(Commands.literal("list")
-                                .then(Commands.argument("roomname", StringArgumentType.string())
-                                        .executes(EscapeRoomCommands::instanceList)))
+                // Parar la partida: la arena vuelve a estar inerte
+                .then(Commands.literal("stop")
+                        .then(Commands.literal("all")
+                                .executes(context -> setRunningAll(context, false))
+                        )
+                        .then(Commands.argument("arena", StringArgumentType.word())
+                                .suggests(ARENA_IDS)
+                                .executes(context -> setRunning(context, false))
+                        )
+                )
+
+                // Resetear una arena (o todas): repega su instance en el origen configurado
+                .then(Commands.literal("reset")
+                        .then(Commands.literal("all")
+                                .executes(EscapeRoomCommands::resetAll)
+                        )
+                        .then(Commands.argument("arena", StringArgumentType.word())
+                                .suggests(ARENA_IDS)
+                                .executes(EscapeRoomCommands::reset)
+                        )
+                )
+
+                // Recargar instances y arenas desde el disco
+                .then(Commands.literal("reload")
+                        .executes(EscapeRoomCommands::reload)
+                )
+
+                // Gestión de arenas (config/GWW/config.yml)
+                .then(Commands.literal("arena")
                         .then(Commands.literal("create")
-                                .then(Commands.argument("roomname", StringArgumentType.string())
-                                        .then(Commands.argument("id", StringArgumentType.string())
-                                                .executes(EscapeRoomCommands::instanceCreate))))
-                        .then(Commands.literal("createall")
-                                .then(Commands.argument("roomname", StringArgumentType.string())
-                                        .executes(EscapeRoomCommands::instanceCreateAll)))
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .then(Commands.argument("instance", StringArgumentType.word())
+                                                .suggests(INSTANCE_NAMES)
+                                                .then(Commands.argument("origin", BlockPosArgument.blockPos())
+                                                        .then(Commands.argument("zonemin", BlockPosArgument.blockPos())
+                                                                .then(Commands.argument("zonemax", BlockPosArgument.blockPos())
+                                                                        .executes(EscapeRoomCommands::arenaCreate)
+                                                                )
+                                                        )
+                                                )
+                                        )
+                                )
+                        )
+                        .then(Commands.literal("setjail")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .suggests(ARENA_IDS)
+                                        .then(Commands.argument("jailmin", BlockPosArgument.blockPos())
+                                                .then(Commands.argument("jailmax", BlockPosArgument.blockPos())
+                                                        .executes(EscapeRoomCommands::arenaSetJail)
+                                                )
+                                        )
+                                )
+                        )
                         .then(Commands.literal("remove")
-                                .then(Commands.argument("roomname", StringArgumentType.string())
-                                        .then(Commands.argument("id", StringArgumentType.string())
-                                                .executes(EscapeRoomCommands::instanceRemove))))
-                        .then(Commands.literal("clearall")
-                                .then(Commands.argument("roomname", StringArgumentType.string())
-                                        .executes(EscapeRoomCommands::instanceClearAll)))
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .suggests(ARENA_IDS)
+                                        .executes(EscapeRoomCommands::arenaRemove)
+                                )
+                        )
+                        .then(Commands.literal("list")
+                                .executes(EscapeRoomCommands::arenaList)
+                        )
                 )
         );
     }
 
-    // ==================== MÉTODOS AUXILIARES ====================
+    // ==================== AUXILIARES ====================
 
     /**
-     * Asegura que el preset con el nombre dado esté cargado en memoria.
-     * Si ya está cargado, devuelve true. Si no, intenta cargarlo desde el archivo.
-     * En caso de error, envía un mensaje de error al source y devuelve false.
+     * Devuelve la instance guardada con ese nombre, o null (avisando al ejecutor)
+     * si no existe.
      */
-    private static boolean ensurePresetLoaded(String name, CommandSourceStack source) {
-        if (loadedRooms.containsKey(name)) {
-            return true;
-        }
-
-        // Intentar cargar desde archivo
-        File file = new File("escaperooms/" + name + ".dat");
-        if (!file.exists()) {
+    private static Instance requireInstance(String name, CommandSourceStack source) {
+        Instance instance = InstanceManager.get(name);
+        if (instance == null) {
             source.sendFailure(Component.literal(
-                    "§cEl preset '" + name + "' no existe como archivo. Debes guardarlo primero con /escaperoom save <nombre>."
-            ));
-            return false;
+                    "§cNo existe la instance '" + name + "'. Guardadas: "
+                            + String.join(", ", InstanceManager.getNames())));
         }
-
-        try {
-            EscapeRoomData data = EscapeRoomManager.loadFromFile(file);
-            loadedRooms.put(name, data);
-            source.sendSuccess(() -> Component.literal(
-                    "§aPreset '" + name + "' cargado automáticamente desde archivo."
-            ), true);
-            return true;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal(
-                    "§cError al cargar el preset '" + name + "': " + e.getMessage()
-            ));
-            e.printStackTrace();
-            return false;
-        }
+        return instance;
     }
 
-    /**
-     * Obtiene la posición de una instancia guardada por su índice.
-     * Si el índice no es válido, envía un mensaje de error y devuelve null.
-     */
-    private static BlockPos getPositionById(String room, String idStr, CommandSourceStack source) {
-        List<BlockPos> positions = EscapeRoomManager.getInstancePositions(room);
-        if (positions.isEmpty()) {
-            source.sendFailure(Component.literal("§cNo hay posiciones guardadas para '" + room + "'."));
-            return null;
-        }
-        try {
-            int index = Integer.parseInt(idStr);
-            if (index < 0 || index >= positions.size()) {
-                source.sendFailure(Component.literal("§cÍndice inválido. Rango: 0 - " + (positions.size() - 1)));
-                return null;
-            }
-            return positions.get(index);
-        } catch (NumberFormatException e) {
-            source.sendFailure(Component.literal("§cEl ID debe ser un número entero."));
-            return null;
-        }
-    }
-
-    // ==================== COMANDOS PRINCIPALES ====================
+    // ==================== INSTANCES ====================
 
     private static int capture(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "name");
         int radius = IntegerArgumentType.getInteger(context, "radius");
         CommandSourceStack source = context.getSource();
-        ServerLevel level = source.getLevel();
-        BlockPos pos = BlockPos.containing(source.getPosition());
+        BlockPos origin = BlockPos.containing(source.getPosition());
 
-        EscapeRoomData data = EscapeRoomManager.captureArea(level, pos, radius, name);
-        loadedRooms.put(name, data);
+        clipboard = InstanceManager.capture(source.getLevel(), origin, radius);
 
         source.sendSuccess(() -> Component.literal(
-                "§aEscape room '" + name + "' capturado con " +
-                        data.getEntities().size() + " entidades en " + pos.toShortString()
+                "§aCapturadas §f" + clipboard.getEntities().size() + "§a entidades alrededor de "
+                        + origin.toShortString() + " §7(radio " + radius + ")\n"
+                        + "§7Guárdala con /escaperoom save <nombre>"
         ), true);
         return 1;
     }
 
     private static int save(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "name");
+        String name = StringArgumentType.getString(context, "instance");
         CommandSourceStack source = context.getSource();
 
-        if (!loadedRooms.containsKey(name)) {
-            source.sendFailure(Component.literal("§cEl preset '" + name + "' no está cargado en memoria."));
+        if (clipboard == null) {
+            source.sendFailure(Component.literal(
+                    "§cNo hay nada capturado. Usa primero /escaperoom capture <radio>."));
+            return 0;
+        }
+        if (!InstanceManager.isValidName(name)) {
+            source.sendFailure(Component.literal(
+                    "§cNombre inválido. Usa solo letras, números, '_' o '-'."));
             return 0;
         }
 
+        boolean overwrite = InstanceManager.get(name) != null;
+        Instance saved = clipboard;
         try {
-            File file = new File("escaperooms/" + name + ".dat");
-            file.getParentFile().mkdirs();
-            EscapeRoomManager.saveToFile(loadedRooms.get(name), file);
-            source.sendSuccess(() -> Component.literal(
-                    "§aEscape room '" + name + "' guardado en archivo."
-            ), true);
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("§cError al guardar: " + e.getMessage()));
-            e.printStackTrace();
+            InstanceManager.save(name, saved);
+        } catch (IOException e) {
+            source.sendFailure(Component.literal("§cError al guardar la instance: " + e.getMessage()));
+            GWW.LOGGER.error("[GWW] Error al guardar la instance '{}'", name, e);
             return 0;
         }
-    }
-
-    private static int load(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "name");
-        CommandSourceStack source = context.getSource();
-
-        try {
-            File file = new File("escaperooms/" + name + ".dat");
-            if (!file.exists()) {
-                source.sendFailure(Component.literal("§cArchivo no encontrado: escaperooms/" + name + ".dat"));
-                return 0;
-            }
-
-            EscapeRoomData data = EscapeRoomManager.loadFromFile(file);
-            loadedRooms.put(name, data);
-
-            source.sendSuccess(() -> Component.literal(
-                    "§aEscape room '" + name + "' cargado desde archivo (" +
-                            data.getEntities().size() + " entidades)"
-            ), true);
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("§cError al cargar: " + e.getMessage()));
-            e.printStackTrace();
-            return 0;
-        }
-    }
-
-    private static int paste(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "name");
-        CommandSourceStack source = context.getSource();
-
-        if (!ensurePresetLoaded(name, source)) {
-            return 0;
-        }
-
-        ServerLevel level = source.getLevel();
-        BlockPos pos = BlockPos.containing(source.getPosition());
-        EscapeRoomManager.restoreAt(level, loadedRooms.get(name), pos);
 
         source.sendSuccess(() -> Component.literal(
-                "§aEscape room '" + name + "' pegado en " + pos.toShortString()
+                "§aInstance '" + name + "' " + (overwrite ? "sobrescrita" : "guardada")
+                        + " §7(" + saved.getEntities().size() + " entidades) en "
+                        + InstanceManager.getDirectory().resolve(name + ".dat")
         ), true);
         return 1;
     }
 
-    private static int pasteAt(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "name");
+    private static int delete(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "instance");
         CommandSourceStack source = context.getSource();
 
-        if (!ensurePresetLoaded(name, source)) {
+        List<String> usedBy = ArenaManager.getAll().stream()
+                .filter(arena -> arena.getInstanceName().equals(name))
+                .map(Arena::getId)
+                .toList();
+        if (!usedBy.isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "§cNo se puede borrar: la usan las arenas " + String.join(", ", usedBy) + "."));
             return 0;
         }
 
-        ServerLevel level = source.getLevel();
-        BlockPos pos = BlockPosArgument.getBlockPos(context, "pos");
-        EscapeRoomManager.restoreAt(level, loadedRooms.get(name), pos);
+        try {
+            if (!InstanceManager.delete(name)) {
+                source.sendFailure(Component.literal("§cNo existe la instance '" + name + "'."));
+                return 0;
+            }
+        } catch (IOException e) {
+            source.sendFailure(Component.literal("§cError al borrar la instance: " + e.getMessage()));
+            return 0;
+        }
+
+        source.sendSuccess(() -> Component.literal("§cInstance '" + name + "' borrada."), true);
+        return 1;
+    }
+
+    private static int paste(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "instance");
+        CommandSourceStack source = context.getSource();
+
+        Instance instance = requireInstance(name, source);
+        if (instance == null) {
+            return 0;
+        }
+
+        BlockPos target = BlockPos.containing(source.getPosition());
+        InstanceManager.paste(source.getLevel(), instance, target);
 
         source.sendSuccess(() -> Component.literal(
-                "§aEscape room '" + name + "' pegado en " + pos.toShortString()
-        ), true);
+                "§aInstance '" + name + "' pegada en " + target.toShortString()), true);
+        return 1;
+    }
+
+    private static int pasteAt(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "instance");
+        CommandSourceStack source = context.getSource();
+
+        Instance instance = requireInstance(name, source);
+        if (instance == null) {
+            return 0;
+        }
+
+        BlockPos target = BlockPosArgument.getBlockPos(context, "pos");
+        InstanceManager.paste(source.getLevel(), instance, target);
+
+        source.sendSuccess(() -> Component.literal(
+                "§aInstance '" + name + "' pegada en " + target.toShortString()), true);
         return 1;
     }
 
     private static int clear(CommandContext<CommandSourceStack> context) {
         int radius = IntegerArgumentType.getInteger(context, "radius");
         CommandSourceStack source = context.getSource();
-        ServerLevel level = source.getLevel();
-        BlockPos pos = BlockPos.containing(source.getPosition());
+        BlockPos center = BlockPos.containing(source.getPosition());
 
-        EscapeRoomManager.clearArea(level, pos, radius);
+        InstanceManager.clear(source.getLevel(), center, radius);
 
         source.sendSuccess(() -> Component.literal(
-                "§aÁrea limpiada en " + pos.toShortString() + " (radio: " + radius + ")"
-        ), true);
+                "§aÁrea limpiada en " + center.toShortString() + " §7(radio " + radius + ")"), true);
         return 1;
     }
 
     private static int clearAt(CommandContext<CommandSourceStack> context) {
         int radius = IntegerArgumentType.getInteger(context, "radius");
         CommandSourceStack source = context.getSource();
-        ServerLevel level = source.getLevel();
-        BlockPos pos = BlockPosArgument.getBlockPos(context, "pos");
+        BlockPos center = BlockPosArgument.getBlockPos(context, "pos");
 
-        EscapeRoomManager.clearArea(level, pos, radius);
+        InstanceManager.clear(source.getLevel(), center, radius);
 
         source.sendSuccess(() -> Component.literal(
-                "§aÁrea limpiada en " + pos.toShortString() + " (radio: " + radius + ")"
-        ), true);
+                "§aÁrea limpiada en " + center.toShortString() + " §7(radio " + radius + ")"), true);
         return 1;
     }
 
     private static int list(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
 
-        if (loadedRooms.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("§eNo hay escape rooms cargados."), false);
+        if (clipboard != null) {
+            source.sendSuccess(() -> Component.literal(
+                    "§7Portapapeles: " + clipboard.getEntities().size()
+                            + " entidades sin guardar (/escaperoom save <nombre>)"), false);
+        }
+
+        if (InstanceManager.getNames().isEmpty()) {
+            source.sendSuccess(() -> Component.literal("§eNo hay instances guardadas."), false);
             return 1;
         }
 
-        source.sendSuccess(() -> Component.literal("§6=== Escape Rooms Cargados ==="), false);
-        loadedRooms.forEach((name, data) -> source.sendSuccess(() -> Component.literal(
-                "§e- " + name + " §7(" + data.getEntities().size() + " entidades, centro: " +
-                        data.getCenterPos().toShortString() + ")"
-        ), false));
-
+        source.sendSuccess(() -> Component.literal("§6=== Instances guardadas ==="), false);
+        for (String name : InstanceManager.getNames()) {
+            Instance instance = InstanceManager.get(name);
+            source.sendSuccess(() -> Component.literal(
+                    "§e- " + name + " §7(" + instance.getEntities().size()
+                            + " entidades, radio " + instance.getRadius() + ")"), false);
+        }
         return 1;
     }
 
     private static int info(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "name");
+        String name = StringArgumentType.getString(context, "instance");
         CommandSourceStack source = context.getSource();
 
-        if (!ensurePresetLoaded(name, source)) {
+        Instance instance = requireInstance(name, source);
+        if (instance == null) {
             return 0;
         }
 
-        EscapeRoomData data = loadedRooms.get(name);
-        source.sendSuccess(() -> Component.literal("§6=== Info: " + name + " ==="), false);
-        source.sendSuccess(() -> Component.literal("§eCentro: §f" + data.getCenterPos().toShortString()), false);
-        source.sendSuccess(() -> Component.literal("§eEntidades: §f" + data.getEntities().size()), false);
+        source.sendSuccess(() -> Component.literal("§6=== Instance: " + name + " ==="), false);
+        source.sendSuccess(() -> Component.literal(
+                "§eCapturada en: §f" + instance.getOrigin().toShortString()
+                        + " §7(radio " + instance.getRadius() + ")"), false);
+        source.sendSuccess(() -> Component.literal(
+                "§eEntidades: §f" + instance.getEntities().size()), false);
 
-        // Desglose por tipo
-        Map<String, Integer> entityTypes = new HashMap<>();
-        data.getEntities().forEach(snapshot -> {
-            String type = snapshot.getEntityType();
-            entityTypes.put(type, entityTypes.getOrDefault(type, 0) + 1);
-        });
-
-        source.sendSuccess(() -> Component.literal("§eDesglose:"), false);
-        entityTypes.forEach((type, count) -> source.sendSuccess(() -> Component.literal("  §7- " + type + ": §f" + count), false));
+        Map<String, Integer> byType = new HashMap<>();
+        instance.getEntities().forEach(snapshot ->
+                byType.merge(snapshot.getEntityType(), 1, Integer::sum));
+        byType.forEach((type, count) -> source.sendSuccess(() -> Component.literal(
+                "  §7- " + type + ": §f" + count), false));
 
         return 1;
     }
 
-    // ==================== COMANDOS DE INSTANCIAS (MODIFICADOS) ====================
-
-    private static int instanceAdd(CommandContext<CommandSourceStack> context) {
-        String room = StringArgumentType.getString(context, "roomname");
-        BlockPos pos = BlockPosArgument.getBlockPos(context, "pos");
+    private static int reload(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
 
-        // Verificar que el preset existe antes de añadir la posición
-        if (!ensurePresetLoaded(room, source)) {
+        List<String> errors = InstanceManager.loadAll();
+        errors.addAll(ArenaManager.load());
+        errors.addAll(GwwSettings.load());
+        errors.forEach(error -> source.sendFailure(Component.literal("§c" + error)));
+
+        source.sendSuccess(() -> Component.literal(
+                "§aRecargado: " + InstanceManager.getNames().size() + " instances, "
+                        + ArenaManager.getAll().size() + " arenas y los ajustes de settings.yml."), true);
+        return errors.isEmpty() ? 1 : 0;
+    }
+
+    // ==================== ARENAS (config/GWW/config.yml) ====================
+
+    private static Arena requireArena(String id, CommandSourceStack source) {
+        Arena arena = ArenaManager.get(id);
+        if (arena == null) {
+            source.sendFailure(Component.literal(
+                    "§cNo existe la arena '" + id + "'. Disponibles: "
+                            + String.join(", ", ArenaManager.getIds())));
+        }
+        return arena;
+    }
+
+    /**
+     * Arranca o para la partida de una arena. Los Ublablas se congelan y descongelan
+     * solos en su propio tick al ver el cambio de estado, así que aquí basta con
+     * cambiarlo.
+     */
+    private static int setRunning(CommandContext<CommandSourceStack> context, boolean running) {
+        String arenaId = StringArgumentType.getString(context, "arena");
+        CommandSourceStack source = context.getSource();
+
+        Arena arena = requireArena(arenaId, source);
+        if (arena == null) {
             return 0;
         }
 
-        EscapeRoomManager.addInstancePosition(room, pos);
-        source.sendSuccess(() -> Component.literal(
-                "§aPosición añadida para '" + room + "' en " + pos.toShortString()
+        if (ArenaManager.isRunning(arenaId) == running) {
+            source.sendFailure(Component.literal("§cLa arena '" + arenaId + "' ya está "
+                    + (running ? "en marcha" : "parada") + "."));
+            return 0;
+        }
+
+        ArenaManager.setRunning(arenaId, running);
+        if (!running) {
+            // Parar la partida apaga la luz: nadie se queda con la visión nocturna puesta.
+            ArenaLight.refresh(source.getLevel(), arena, false);
+        }
+
+        source.sendSuccess(() -> Component.literal(running
+                ? "§a▶ Arena '" + arenaId + "' EN MARCHA. §7Barra de ruido activa y Ublablas sueltos."
+                : "§e■ Arena '" + arenaId + "' PARADA. §7Sin barra de ruido, sin luz y Ublablas en su puesto."
         ), true);
         return 1;
     }
 
-    private static int instanceList(CommandContext<CommandSourceStack> context) {
-        String room = StringArgumentType.getString(context, "roomname");
-        List<BlockPos> positions = EscapeRoomManager.getInstancePositions(room);
+    /** Igual que setRunning, pero de golpe para todas las arenas configuradas. */
+    private static int setRunningAll(CommandContext<CommandSourceStack> context, boolean running) {
         CommandSourceStack source = context.getSource();
 
-        if (positions.isEmpty()) {
-            source.sendFailure(Component.literal("§cNo hay instancias guardadas para '" + room + "'."));
+        if (ArenaManager.getAll().isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "§cNo hay arenas configuradas en config/GWW/config.yml."));
             return 0;
         }
 
-        source.sendSuccess(() -> Component.literal("§6=== Instancias de " + room + " ==="), false);
-        for (int i = 0; i < positions.size(); i++) {
-            int finalI = i;
-            source.sendSuccess(() -> Component.literal(
-                    "§e" + finalI + ": " + positions.get(finalI).toShortString()
-            ), false);
+        int changed = 0;
+        for (Arena arena : List.copyOf(ArenaManager.getAll())) {
+            if (ArenaManager.isRunning(arena.getId()) == running) {
+                continue;
+            }
+            ArenaManager.setRunning(arena.getId(), running);
+            if (!running) {
+                ArenaLight.refresh(source.getLevel(), arena, false);
+            }
+            changed++;
         }
-        return 1;
-    }
 
-    private static int instanceCreate(CommandContext<CommandSourceStack> context) {
-        String room = StringArgumentType.getString(context, "roomname");
-        String idStr = StringArgumentType.getString(context, "id");
-        CommandSourceStack source = context.getSource();
-
-        // Asegurar que el preset está cargado (intenta cargar automáticamente)
-        if (!ensurePresetLoaded(room, source)) {
+        if (changed == 0) {
+            source.sendFailure(Component.literal("§cTodas las arenas ya están "
+                    + (running ? "en marcha" : "paradas") + "."));
             return 0;
         }
 
-        BlockPos pos = getPositionById(room, idStr, source);
-        if (pos == null) {
-            return 0;
-        }
-
-        EscapeRoomManager.clearArea(source.getLevel(), pos, 60);
-        EscapeRoomManager.restoreAt(source.getLevel(), loadedRooms.get(room), pos);
-
-        source.sendSuccess(() -> Component.literal(
-                "§aInstancia creada en " + pos.toShortString()
+        int total = changed;
+        source.sendSuccess(() -> Component.literal(running
+                ? "§a▶ " + total + " arena(s) EN MARCHA. §7Barra de ruido activa y Ublablas sueltos."
+                : "§e■ " + total + " arena(s) PARADA(s). §7Sin barra de ruido y Ublablas en su puesto."
         ), true);
-        return 1;
+        return total;
     }
 
-    private static int instanceCreateAll(CommandContext<CommandSourceStack> context) {
-        String room = StringArgumentType.getString(context, "roomname");
-        CommandSourceStack source = context.getSource();
-
-        if (!ensurePresetLoaded(room, source)) {
-            return 0;
-        }
-
-        List<BlockPos> positions = EscapeRoomManager.getInstancePositions(room);
-        if (positions.isEmpty()) {
-            source.sendFailure(Component.literal("§cNo hay posiciones guardadas para '" + room + "'."));
-            return 0;
+    /**
+     * Repega la instance de la arena en su origen. Devuelve false (avisando al
+     * ejecutor) si la arena no tiene una instance guardada con la que montarse.
+     */
+    private static boolean resetArena(Arena arena, CommandSourceStack source) {
+        Instance instance = requireInstance(arena.getInstanceName(), source);
+        if (instance == null) {
+            return false;
         }
 
         ServerLevel level = source.getLevel();
-        EscapeRoomData data = loadedRooms.get(room);
+        InstanceManager.paste(level, instance, arena.getOrigin());
 
-        for (BlockPos pos : positions) {
-            EscapeRoomManager.restoreAt(level, data, pos);
+        // La jaula es propia de la arena, no de la instance: se aplica al pegar.
+        if (arena.hasJail()) {
+            level.getEntitiesOfClass(UblablaEntity.class, arena.getZoneAABB(), u -> true)
+                    .forEach(u -> u.setJailArea(arena.getJailMin(), arena.getJailMax()));
+        }
+
+        // El interruptor que se acaba de pegar trae el estado con el que se capturó
+        // (normalmente apagado), así que la luz se recalcula desde cero: si no, los
+        // jugadores que estuvieran dentro se quedarían con la visión nocturna puesta.
+        ArenaLight.refresh(level, arena, ArenaLight.isOn(level, arena));
+
+        source.sendSuccess(() -> Component.literal(
+                "§aArena '" + arena.getId() + "' reseteada: " + instance.getEntities().size()
+                        + " entidades restauradas en " + arena.getOrigin().toShortString()), true);
+        return true;
+    }
+
+    private static int reset(CommandContext<CommandSourceStack> context) {
+        String arenaId = StringArgumentType.getString(context, "arena");
+        CommandSourceStack source = context.getSource();
+
+        Arena arena = requireArena(arenaId, source);
+        if (arena == null) {
+            return 0;
+        }
+        return resetArena(arena, source) ? 1 : 0;
+    }
+
+    /**
+     * Resetea todas las arenas. Una arena sin instance guardada no aborta el resto:
+     * se avisa y se sigue con las demás.
+     */
+    private static int resetAll(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+
+        if (ArenaManager.getAll().isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "§cNo hay arenas configuradas en config/GWW/config.yml."));
+            return 0;
+        }
+
+        int done = 0;
+        for (Arena arena : List.copyOf(ArenaManager.getAll())) {
+            if (resetArena(arena, source)) {
+                done++;
+            }
+        }
+
+        if (done == 0) {
+            source.sendFailure(Component.literal("§cNo se pudo resetear ninguna arena."));
+            return 0;
+        }
+
+        int total = done;
+        source.sendSuccess(() -> Component.literal(
+                "§a" + total + " arena(s) reseteada(s)."), true);
+        return total;
+    }
+
+    private static int arenaCreate(CommandContext<CommandSourceStack> context) {
+        String id = StringArgumentType.getString(context, "id");
+        String instanceName = StringArgumentType.getString(context, "instance");
+        CommandSourceStack source = context.getSource();
+
+        if (!id.matches("[A-Za-z0-9_-]+")) {
+            source.sendFailure(Component.literal(
+                    "§cID inválido. Usa solo letras, números, '_' o '-'."));
+            return 0;
+        }
+
+        // Refrescar desde disco para no pisar ediciones manuales del yml
+        ArenaManager.load();
+
+        if (ArenaManager.get(id) != null) {
+            source.sendFailure(Component.literal(
+                    "§cLa arena '" + id + "' ya existe. Elimínala primero con /escaperoom arena remove " + id));
+            return 0;
+        }
+
+        BlockPos origin = BlockPosArgument.getBlockPos(context, "origin");
+        BlockPos zoneMin = BlockPosArgument.getBlockPos(context, "zonemin");
+        BlockPos zoneMax = BlockPosArgument.getBlockPos(context, "zonemax");
+
+        try {
+            ArenaManager.addOrUpdate(new Arena(id, instanceName, origin, zoneMin, zoneMax, null, null));
+        } catch (IOException e) {
+            source.sendFailure(Component.literal("§cError guardando config.yml: " + e.getMessage()));
+            return 0;
+        }
+
+        if (InstanceManager.get(instanceName) == null) {
+            source.sendSuccess(() -> Component.literal(
+                    "§eAviso: la instance '" + instanceName + "' aún no existe. "
+                            + "Captúrala y guárdala con /escaperoom save " + instanceName), false);
         }
 
         source.sendSuccess(() -> Component.literal(
-                "§aSe crearon " + positions.size() + " instancias de '" + room + "'."
+                "§aArena '" + id + "' creada y guardada en config/GWW/config.yml.\n"
+                        + "§7Jaula (opcional): /escaperoom arena setjail " + id + " <min> <max>\n"
+                        + "§7Montarla: /escaperoom reset " + id
         ), true);
         return 1;
     }
 
-    private static int instanceRemove(CommandContext<CommandSourceStack> context) {
-        String room = StringArgumentType.getString(context, "roomname");
-        String idStr = StringArgumentType.getString(context, "id");
+    private static int arenaSetJail(CommandContext<CommandSourceStack> context) {
+        String id = StringArgumentType.getString(context, "id");
         CommandSourceStack source = context.getSource();
 
-        try {
-            int index = Integer.parseInt(idStr);
-            if (EscapeRoomManager.removeInstance(room, index)) {
-                source.sendSuccess(() -> Component.literal("§cInstancia eliminada."), true);
-            } else {
-                source.sendFailure(Component.literal("§cÍndice inválido o no hay instancias."));
-            }
-        } catch (NumberFormatException e) {
-            source.sendFailure(Component.literal("§cEl ID debe ser un número entero."));
+        ArenaManager.load();
+        Arena existing = ArenaManager.get(id);
+        if (existing == null) {
+            source.sendFailure(Component.literal(
+                    "§cNo existe la arena '" + id + "'. Disponibles: "
+                            + String.join(", ", ArenaManager.getIds())));
+            return 0;
         }
+
+        BlockPos jailMin = BlockPosArgument.getBlockPos(context, "jailmin");
+        BlockPos jailMax = BlockPosArgument.getBlockPos(context, "jailmax");
+
+        try {
+            ArenaManager.addOrUpdate(new Arena(existing.getId(), existing.getInstanceName(),
+                    existing.getOrigin(), existing.getZoneMin(), existing.getZoneMax(),
+                    jailMin, jailMax));
+        } catch (IOException e) {
+            source.sendFailure(Component.literal("§cError guardando config.yml: " + e.getMessage()));
+            return 0;
+        }
+
+        source.sendSuccess(() -> Component.literal(
+                "§aJaula de la arena '" + id + "' definida: " + jailMin.toShortString()
+                        + " -> " + jailMax.toShortString()
+                        + ". Se aplicará a los Ublablas en el próximo /escaperoom reset " + id
+        ), true);
         return 1;
     }
 
-    private static int instanceClearAll(CommandContext<CommandSourceStack> context) {
-        String room = StringArgumentType.getString(context, "roomname");
-        EscapeRoomManager.clearAllInstances(room);
-        context.getSource().sendSuccess(() -> Component.literal(
-                "§cTodas las instancias de '" + room + "' han sido eliminadas."
-        ), true);
+    private static int arenaRemove(CommandContext<CommandSourceStack> context) {
+        String id = StringArgumentType.getString(context, "id");
+        CommandSourceStack source = context.getSource();
+
+        ArenaManager.load();
+        try {
+            if (!ArenaManager.remove(id)) {
+                source.sendFailure(Component.literal("§cNo existe la arena '" + id + "'."));
+                return 0;
+            }
+        } catch (IOException e) {
+            source.sendFailure(Component.literal("§cError guardando config.yml: " + e.getMessage()));
+            return 0;
+        }
+
+        source.sendSuccess(() -> Component.literal(
+                "§cArena '" + id + "' eliminada de config/GWW/config.yml."), true);
+        return 1;
+    }
+
+    private static int arenaList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+
+        if (ArenaManager.getAll().isEmpty()) {
+            source.sendSuccess(() -> Component.literal(
+                    "§eNo hay arenas configuradas en config/GWW/config.yml."), false);
+            return 1;
+        }
+
+        source.sendSuccess(() -> Component.literal("§6=== Arenas configuradas ==="), false);
+        for (Arena arena : ArenaManager.getAll()) {
+            String status = ArenaManager.isRunning(arena.getId()) ? "§a▶ " : "§8■ ";
+            source.sendSuccess(() -> Component.literal(
+                    status + "§e" + arena.getId()
+                            + " §7(instance: " + arena.getInstanceName()
+                            + ", origen: " + arena.getOrigin().toShortString()
+                            + ", zona: " + arena.getZoneMin().toShortString()
+                            + " -> " + arena.getZoneMax().toShortString()
+                            + (arena.hasJail() ? ", con jaula" : "") + ")"
+            ), false);
+        }
         return 1;
     }
 }

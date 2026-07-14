@@ -2,6 +2,7 @@ package com.github.razorplay01.system;
 
 import com.github.razorplay01.GWW;
 import com.github.razorplay01.api.noise.NoiseAPI;
+import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.network.FabricCustomPayload;
 import com.github.razorplay01.network.packet.NoisePacket;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -10,7 +11,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -24,23 +28,17 @@ public class NoiseDetectionSystem {
 
     private static final Map<UUID, PlayerNoiseData> PLAYER_NOISE_DATA = new HashMap<>();
     private static final Map<UUID, UUID> PLAYER_GROUPS = new HashMap<>(); // player -> groupLeader
-    private static final float DECAY_RATE = 0.015f;
-    private static final float MAX_NOISE = 1.0f;
 
+    /**
+     * Valores que no son configurables desde settings.yml. Los que sí lo son
+     * (el ruido de cada acción, el máximo y el decay) viven en {@link GwwSettings}.
+     */
     public static class NoiseConfig {
-        public static final float WALKING_BASE = 0.1f;
-        public static final float SNEAKING_BASE = 0.05f;
-        public static final float SPRINTING_BASE = 0.2f;
-
         public static final float SURFACE_MULTIPLIER_SOFT = 0.7f;
         public static final float SURFACE_MULTIPLIER_NORMAL = 1.0f;
         public static final float SURFACE_MULTIPLIER_HARD = 1.3f;
         public static final float SURFACE_MULTIPLIER_LOUD = 1.6f;
 
-        public static final float JUMPING = 0.25f;
-        public static final float LANDING_SOFT = 0.2f;
-        public static final float LANDING_NORMAL = 0.4f;
-        public static final float LANDING_HARD = 0.7f;
         public static final float BLOCK_BREAK = 0.5f;
         public static final float BLOCK_PLACE = 0.4f;
         public static final float DAMAGE_TAKEN = 0.6f;
@@ -49,6 +47,15 @@ public class NoiseDetectionSystem {
 
         public static final double MIN_MOVEMENT_SPEED = 0.001;
         public static final double SPRINT_THRESHOLD = 0.1;
+    }
+
+    /**
+     * El sistema de ruido solo existe para quien está jugando: en creativo o
+     * espectador no se acumula ruido ni se ve la barra.
+     */
+    public static boolean isEligible(ServerPlayer player) {
+        GameType mode = player.gameMode.getGameModeForPlayer();
+        return mode == GameType.SURVIVAL || mode == GameType.ADVENTURE;
     }
 
     public static PlayerNoiseData getPlayerData(UUID playerId) {
@@ -63,14 +70,46 @@ public class NoiseDetectionSystem {
         return getGroupLeader(playerId).toString().substring(0, 8);
     }
 
+    /**
+     * Ruido generado por el jugador que interactúa con algo. Es el que hay que usar
+     * desde las entidades: el ruido es de quien toca la palanca, no de quien pasaba
+     * más cerca.
+     */
+    public static void addNoise(Player player, float amount) {
+        if (player instanceof ServerPlayer serverPlayer) {
+            addNoise(serverPlayer, amount);
+        }
+    }
+
+    /**
+     * Ruido de algo que se dispara solo (una caja que se abre de un golpe): al no
+     * haber autor, se le apunta al jugador más cercano que esté jugando de verdad,
+     * saltándose a los que miran en creativo o espectador.
+     */
+    public static void addNoiseNearby(Entity source, double radius, float amount) {
+        if (!(source.level() instanceof ServerLevel level)) return;
+
+        ServerPlayer closest = null;
+        double closestDist = radius * radius;
+        for (ServerPlayer player : level.players()) {
+            if (!isEligible(player)) continue;
+            double dist = player.distanceToSqr(source);
+            if (dist < closestDist) {
+                closestDist = dist;
+                closest = player;
+            }
+        }
+        addNoise(closest, amount);
+    }
+
     public static void addNoise(ServerPlayer player, float amount) {
-        if (player == null) return;
+        if (player == null || !isEligible(player)) return;
         UUID leaderId = getGroupLeader(player.getUUID());
         PlayerNoiseData data = getPlayerData(leaderId);
         if (!data.isEnabled()) return;
 
         amount *= data.getMultiplier();
-        float newNoise = Math.min(data.getCurrentNoise() + amount, MAX_NOISE);
+        float newNoise = Math.min(data.getCurrentNoise() + amount, GwwSettings.noiseMax());
         data.setCurrentNoise(newNoise);
         data.setLastNoiseTime(System.currentTimeMillis());
 
@@ -79,6 +118,18 @@ public class NoiseDetectionSystem {
 
     public static void tick(ServerPlayer player) {
         PlayerNoiseData data = getPlayerData(player.getUUID());
+
+        // Al pasar a creativo o espectador se corta en seco: se apaga el ruido
+        // acumulado y se le oculta la barra.
+        if (!isEligible(player)) {
+            if (data.isEnabled()) {
+                data.setEnabled(false);
+                data.reset();
+                sendHidden(player);
+            }
+            return;
+        }
+
         if (!data.isEnabled()) return;
 
         detectMovementNoise(player, data);
@@ -98,7 +149,7 @@ public class NoiseDetectionSystem {
     private static void applyGroupDecay(UUID leaderId) {
         PlayerNoiseData data = getPlayerData(leaderId);
         if (data.getCurrentNoise() > 0) {
-            data.setCurrentNoise(Math.max(0, data.getCurrentNoise() - DECAY_RATE));
+            data.setCurrentNoise(Math.max(0, data.getCurrentNoise() - GwwSettings.noiseDecayPerTick()));
         }
     }
 
@@ -145,8 +196,8 @@ public class NoiseDetectionSystem {
     }
 
     private static float calculateFootstepNoise(ServerPlayer player, PlayerNoiseData data) {
-        float baseNoise = player.isSprinting() ? NoiseConfig.SPRINTING_BASE :
-                player.isCrouching() ? NoiseConfig.SNEAKING_BASE : NoiseConfig.WALKING_BASE;
+        float baseNoise = player.isSprinting() ? GwwSettings.sprinting() :
+                player.isCrouching() ? GwwSettings.sneaking() : GwwSettings.walking();
 
         float surfaceMultiplier = getSurfaceMultiplier(player);
         float speedMultiplier = getSpeedMultiplier(player);
@@ -186,8 +237,8 @@ public class NoiseDetectionSystem {
 
     private static void handleLanding(ServerPlayer player, PlayerNoiseData data) {
         double fallSpeed = Math.abs(player.getDeltaMovement().y);
-        float landingNoise = fallSpeed < 0.3 ? NoiseConfig.LANDING_SOFT :
-                fallSpeed < 0.6 ? NoiseConfig.LANDING_NORMAL : NoiseConfig.LANDING_HARD;
+        float landingNoise = fallSpeed < 0.3 ? GwwSettings.landingSoft() :
+                fallSpeed < 0.6 ? GwwSettings.landingNormal() : GwwSettings.landingHard();
 
         landingNoise *= getSurfaceMultiplier(player);
         if (fallSpeed >= 0.6) landingNoise *= Math.min(2.0f, (float) fallSpeed);
@@ -196,7 +247,7 @@ public class NoiseDetectionSystem {
     }
 
     private static void handleJump(ServerPlayer player, PlayerNoiseData data) {
-        float jumpNoise = NoiseConfig.JUMPING;
+        float jumpNoise = GwwSettings.jumping();
         if (player.isSprinting()) jumpNoise *= 1.5f;
         else if (player.isCrouching()) jumpNoise *= 0.5f;
         addNoise(player, jumpNoise);
@@ -243,9 +294,26 @@ public class NoiseDetectionSystem {
         syncGroupToClients(leader);
     }
 
+    /** Oculta la barra a un jugador concreto. */
+    private static void sendHidden(ServerPlayer player) {
+        ServerPlayNetworking.send(player, new FabricCustomPayload(new NoisePacket(0f, 0f, false)));
+    }
+
+    /**
+     * La barra del cliente siempre va de 0 a 1, así que el ruido se manda como
+     * fracción de la capacidad configurada: subir 'noise.max' hace que se llene
+     * más despacio, bajarlo que se llene antes.
+     */
+    private static float asBarFraction(float noise) {
+        return Math.min(1.0f, noise / GwwSettings.noiseMax());
+    }
+
     private static void syncGroupToClients(UUID leaderId) {
         PlayerNoiseData data = getPlayerData(leaderId);
-        NoisePacket packet = new NoisePacket(data.getCurrentNoise(), DECAY_RATE, data.isEnabled());
+        NoisePacket packet = new NoisePacket(
+                asBarFraction(data.getCurrentNoise()),
+                asBarFraction(GwwSettings.noiseDecayPerTick()),
+                data.isEnabled());
 
         // Sincronizar a todos los miembros del grupo
         for (Map.Entry<UUID, UUID> entry : PLAYER_GROUPS.entrySet()) {
@@ -265,6 +333,46 @@ public class NoiseDetectionSystem {
 
     private static ServerPlayer getPlayerByUUID(UUID uuid) {
         return GWW.server.getPlayerList().getPlayer(uuid);
+    }
+
+    // ==================== GRUPOS POR ARENA ====================
+
+    /**
+     * Mete al jugador en el grupo de ruido de una arena. El líder es un UUID
+     * sintético por arena, así el grupo no depende de ningún jugador concreto
+     * y admite cualquier cantidad de miembros.
+     */
+    public static void joinArenaGroup(ServerPlayer player, UUID arenaGroupId) {
+        PLAYER_GROUPS.put(player.getUUID(), arenaGroupId);
+
+        PlayerNoiseData groupData = getPlayerData(arenaGroupId);
+        groupData.setEnabled(true);
+
+        // El flag propio controla la detección de movimiento en tick()
+        PlayerNoiseData own = getPlayerData(player.getUUID());
+        own.setEnabled(true);
+        own.setLastPosition(player.position());
+
+        syncGroupToClients(arenaGroupId);
+    }
+
+    /**
+     * Saca al jugador del grupo de su arena y le oculta la barra de ruido.
+     */
+    public static void leaveArenaGroup(ServerPlayer player) {
+        removeFromArenaGroup(player.getUUID());
+        sendHidden(player);
+    }
+
+    /**
+     * Variante sin jugador conectado (desconexiones): limpia el estado
+     * sin intentar enviar paquetes.
+     */
+    public static void removeFromArenaGroup(UUID playerId) {
+        PLAYER_GROUPS.remove(playerId);
+        PlayerNoiseData own = getPlayerData(playerId);
+        own.reset();
+        own.setEnabled(false);
     }
 
     public static void linkPlayers(UUID p1, UUID p2) {
@@ -301,8 +409,9 @@ public class NoiseDetectionSystem {
         return getPlayerData(getGroupLeader(playerId)).isEnabled();
     }
 
+    /** Ruido del grupo como fracción de la barra (0..1), que es como lo lee el Ublabla. */
     public static float getNoiseLevel(UUID playerId) {
-        return getPlayerData(getGroupLeader(playerId)).getCurrentNoise();
+        return asBarFraction(getPlayerData(getGroupLeader(playerId)).getCurrentNoise());
     }
 
     public static void removePlayer(UUID playerId) {

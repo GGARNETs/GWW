@@ -7,7 +7,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
@@ -82,8 +81,7 @@ public class PuertaAticoEntity extends BaseEntity {
                 if (hasRequiredItem(player)) {
                     consumeRequiredItem(player);
                     setOpen(true);
-                    Player nearestPlayer = this.level().getNearestPlayer(this, 20.0D);
-                    NoiseDetectionSystem.addNoise((ServerPlayer) nearestPlayer, 1.0f);
+                    NoiseDetectionSystem.addNoise(player, 1.0f);
                     player.sendSystemMessage(Component.literal("§a¡Has abierto la puerta del ático!"));
                 } else {
                     player.sendSystemMessage(Component.literal("§cNecesitas un §bobjeto §cpara abrir esta puerta"));

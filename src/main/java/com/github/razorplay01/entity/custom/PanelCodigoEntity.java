@@ -28,6 +28,7 @@ import software.bernie.geckolib.animation.AnimatableManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
 
@@ -53,8 +54,22 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
     private static final EntityDataAccessor<Boolean> POWERED =
             SynchedEntityData.defineId(PanelCodigoEntity.class, EntityDataSerializers.BOOLEAN);
 
+    // Los nombres tienen que coincidir con los de data/gww/hitboxes/panel_codigo.json.
+    // Las cuatro figuras del panel son las mismas que las de la pared: triángulo,
+    // hexágono, pentágono y cuadrado. No hay ningún círculo.
     private static final List<String> DEFAULT_SEQUENCE = Arrays.asList(
-            "triangulo", "circulo", "hexagono", "cuadrado"
+            "triangulo", "hexagono", "pentagono", "cuadrado"
+    );
+
+    /**
+     * Los dos botones de la izquierda estaban mal nombrados: el de arriba, que es un
+     * hexágono, se llamaba "circulo", y el de abajo, que es un pentágono, se llamaba
+     * "hexagono". Las secuencias guardadas antes del arreglo traen los nombres viejos,
+     * así que se traducen al leerlas o el botón de abajo se quedaría muerto.
+     */
+    private static final Map<String, String> LEGACY_PART_NAMES = Map.of(
+            "circulo", "hexagono",
+            "hexagono", "pentagono"
     );
 
     private static final int LOCK_DURATION_TICKS = 40;
@@ -93,6 +108,22 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
             updateAllLinkedDoors();
         }
         // El renderizador leerá directamente powered y solved.
+    }
+
+    /**
+     * Traduce una secuencia guardada con los nombres viejos. Se hace en una sola
+     * pasada: si se aplicara en cadena, el "circulo" convertido en "hexagono" se
+     * volvería a convertir en "pentagono".
+     */
+    private static String migrateLegacyNames(String sequence) {
+        if (!sequence.contains("circulo")) {
+            return sequence;
+        }
+        String[] parts = sequence.split(",");
+        for (int i = 0; i < parts.length; i++) {
+            parts[i] = LEGACY_PART_NAMES.getOrDefault(parts[i], parts[i]);
+        }
+        return String.join(",", parts);
     }
 
     // ---------- Puzzle state ----------
@@ -167,7 +198,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         linkedDoors.addAll(loadLinkedList(tag, "LinkedDoors"));
         String seq = tag.getString("CorrectSequence");
         if (!seq.isEmpty()) {
-            this.entityData.set(DATA_CORRECT_SEQUENCE, seq);
+            this.entityData.set(DATA_CORRECT_SEQUENCE, migrateLegacyNames(seq));
         }
         boolean powered = tag.getBoolean("Powered");
         this.entityData.set(POWERED, powered);

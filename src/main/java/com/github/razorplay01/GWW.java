@@ -1,10 +1,12 @@
 package com.github.razorplay01;
 
+import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.cam.starup.AnnotationFinder;
 import com.github.razorplay01.client.ClientNoiseState;
 import com.github.razorplay01.client.render.NoiseHudRenderer;
 import com.github.razorplay01.command.EscapeRoomConfigCommand;
 import com.github.razorplay01.command.NoiseCommand;
+import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.entity.ModEntities;
 import com.github.razorplay01.entity.attribute.ModAttributes;
 import com.github.razorplay01.entity.client.*;
@@ -13,6 +15,7 @@ import com.github.razorplay01.entity.custom.util.PuzzleEntityChecker;
 import com.github.razorplay01.event.NoiseEventHandler;
 import com.github.razorplay01.extra.MinigameCommand;
 import com.github.razorplay01.extra.MinigameState;
+import com.github.razorplay01.instance.InstanceManager;
 import com.github.razorplay01.item.ModComponents;
 import com.github.razorplay01.item.ModItems;
 import com.github.razorplay01.network.ClientNetworkManager;
@@ -45,8 +48,11 @@ public class GWW implements ModInitializer, ClientModInitializer {
     public void onInitialize() {
         FabricCustomPayload.register();
         ServerNetworkManager.register();
-        EscapeRoomManager.loadInstances();
+        GwwSettings.load();
+        InstanceManager.loadAll();
+        ArenaManager.load();
         ServerTickEvents.START_SERVER_TICK.register(server -> {
+            ArenaManager.tickGroups(server);
             if (currentGame != null && currentGame.isActive()) {
                 boolean sigue = currentGame.tick(server);
                 if (!sigue) {

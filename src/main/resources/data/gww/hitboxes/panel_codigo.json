@@ -1,7 +1,7 @@
 {
 	"elements": [
 		{
-			"name": "circulo",
+			"name": "hexagono",
 			"pos": [-2, 9, 2.06],
 			"width": 3,
 			"height": 3
@@ -19,7 +19,7 @@
 			"height": 3
 		},
 		{
-			"name": "hexagono",
+			"name": "pentagono",
 			"pos": [-2, 5, 2.06],
 			"width": 3,
 			"height": 3

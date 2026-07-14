@@ -1,0 +1,54 @@
+package com.github.razorplay01.arena;
+
+import com.github.razorplay01.entity.custom.InterruptorIndustrialEntity;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+
+/**
+ * La "luz" de una arena: visión nocturna para los jugadores que hay dentro mientras
+ * el interruptor industrial esté encendido.
+ * <p>
+ * El efecto es infinito y se aplica una sola vez, en los dos únicos momentos en los
+ * que puede cambiar: cuando se acciona el interruptor y cuando un jugador cruza el
+ * borde de la arena. No hay ninguna comprobación por tick.
+ */
+public final class ArenaLight {
+    private ArenaLight() {
+    }
+
+    /** Sin partículas ni icono: tiene que parecer que se ha encendido la luz, no una poción. */
+    public static void apply(Player player) {
+        player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION,
+                MobEffectInstance.INFINITE_DURATION, 0, false, false, false));
+    }
+
+    /**
+     * Apaga la luz. Solo retira la visión nocturna infinita que da el mod: una
+     * poción que se haya bebido el jugador se queda como está.
+     */
+    public static void remove(Player player) {
+        MobEffectInstance effect = player.getEffect(MobEffects.NIGHT_VISION);
+        if (effect != null && effect.isInfiniteDuration()) {
+            player.removeEffect(MobEffects.NIGHT_VISION);
+        }
+    }
+
+    /** True si algún interruptor de la arena está encendido. */
+    public static boolean isOn(Level level, Arena arena) {
+        return !level.getEntitiesOfClass(InterruptorIndustrialEntity.class, arena.getZoneAABB(),
+                InterruptorIndustrialEntity::isOn).isEmpty();
+    }
+
+    /** Enciende o apaga la luz para todos los jugadores que hay ahora en la arena. */
+    public static void refresh(Level level, Arena arena, boolean on) {
+        for (Player player : level.getEntitiesOfClass(Player.class, arena.getZoneAABB())) {
+            if (on) {
+                apply(player);
+            } else {
+                remove(player);
+            }
+        }
+    }
+}
