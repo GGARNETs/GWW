@@ -1,5 +1,8 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.arena.Arena;
+import com.github.razorplay01.arena.ArenaLight;
+import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.item.ModItems;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import net.minecraft.core.Direction;
@@ -21,8 +24,6 @@ import org.jetbrains.annotations.NotNull;
 import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.animation.AnimationController;
 import software.bernie.geckolib.animation.RawAnimation;
-
-import java.util.List;
 
 public class PanelEnergiaEntity extends BaseEntity {
 
@@ -84,20 +85,39 @@ public class PanelEnergiaEntity extends BaseEntity {
 
         if (!wasActive && active) {
             notifyLinkedRejas();
+            cutArenaLight();
         }
     }
+
+    /**
+     * Cortar el cable deja la sala a oscuras: se les quita la visión nocturna a los
+     * jugadores de la arena aunque el interruptor industrial siga encendido.
+     */
+    private void cutArenaLight() {
+        if (this.level().isClientSide) return;
+
+        Arena arena = ArenaManager.getArenaAt(this.position());
+        if (arena != null) {
+            ArenaLight.refresh(this.level(), arena, false);
+        }
+    }
+
+    /**
+     * Alcance de la búsqueda de rejas al cortar el cable. Antes eran 5 bloques, y la
+     * reja del ducto está al otro lado de la sala: no la encontraba nunca y por eso
+     * cortar el cable no abría nada.
+     */
+    private static final double REJA_SEARCH_RANGE = 100.0;
 
     private void notifyLinkedRejas() {
         if (this.level().isClientSide) return;
 
-        List<RejaDuctoEntity> rejas = this.level().getEntitiesOfClass(RejaDuctoEntity.class,
-                AABB.ofSize(this.position(), 10, 10, 10), r -> true);
-
-        for (RejaDuctoEntity reja : rejas) {
-            if (reja.isPowerPanelActive()) {
-                reja.tryOpenAutomatically();
-            }
-        }
+        // El enlace lo guarda la reja, no el panel, así que se barren las rejas de la
+        // sala y se le pregunta a cada una si apunta a este panel.
+        this.level().getEntitiesOfClass(RejaDuctoEntity.class,
+                        this.getBoundingBox().inflate(REJA_SEARCH_RANGE),
+                        reja -> reja.isLinkedTo(this))
+                .forEach(RejaDuctoEntity::tryOpenAutomatically);
     }
 
     @Override

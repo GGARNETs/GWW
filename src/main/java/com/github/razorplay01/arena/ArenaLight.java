@@ -1,6 +1,7 @@
 package com.github.razorplay01.arena;
 
 import com.github.razorplay01.entity.custom.InterruptorIndustrialEntity;
+import com.github.razorplay01.entity.custom.PanelEnergiaEntity;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
@@ -35,8 +36,17 @@ public final class ArenaLight {
         }
     }
 
-    /** True si algún interruptor de la arena está encendido. */
+    /**
+     * True si la arena tiene luz: algún interruptor encendido y ningún panel de energía
+     * con el cable cortado. Cortar el cable deja la sala a oscuras aunque el interruptor
+     * siga puesto — es justo lo que hace ese panel.
+     */
     public static boolean isOn(Level level, Arena arena) {
+        boolean powerCut = !level.getEntitiesOfClass(PanelEnergiaEntity.class, arena.getZoneAABB(),
+                PanelEnergiaEntity::isActive).isEmpty();
+        if (powerCut) {
+            return false;
+        }
         return !level.getEntitiesOfClass(InterruptorIndustrialEntity.class, arena.getZoneAABB(),
                 InterruptorIndustrialEntity::isOn).isEmpty();
     }

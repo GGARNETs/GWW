@@ -79,6 +79,9 @@ public class RejaDuctoEntity extends BaseEntity {
         linkedPowerPanels.clear();
     }
 
+    /** Margen al resolver un enlace guardado a la entidad real que hay en esa posición. */
+    private static final double LINK_TOLERANCE_SQ = 2.5;
+
     public boolean isPowerPanelActive() {
         if (linkedPowerPanels.isEmpty()) return true;
 
@@ -88,9 +91,24 @@ public class RejaDuctoEntity extends BaseEntity {
             Vec3 absolutePos = rejaPos.add(relPos);
             List<PanelEnergiaEntity> panels = this.level().getEntitiesOfClass(PanelEnergiaEntity.class,
                     AABB.ofSize(absolutePos, 5, 5, 5),
-                    p -> p.position().distanceToSqr(absolutePos) < 2.5);
+                    p -> p.position().distanceToSqr(absolutePos) < LINK_TOLERANCE_SQ);
 
             if (!panels.isEmpty() && panels.get(0).isActive()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True si esta reja está enlazada a ese panel concreto. El enlace lo guarda la
+     * reja (como desplazamiento hasta el panel), así que es ella quien puede
+     * responder a la pregunta; el panel no tiene referencia de vuelta.
+     */
+    public boolean isLinkedTo(PanelEnergiaEntity panel) {
+        Vec3 rejaPos = this.position();
+        for (Vec3 relPos : linkedPowerPanels) {
+            if (rejaPos.add(relPos).distanceToSqr(panel.position()) < LINK_TOLERANCE_SQ) {
                 return true;
             }
         }

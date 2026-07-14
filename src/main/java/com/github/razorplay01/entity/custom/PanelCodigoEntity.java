@@ -54,6 +54,15 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
     private static final EntityDataAccessor<Boolean> POWERED =
             SynchedEntityData.defineId(PanelCodigoEntity.class, EntityDataSerializers.BOOLEAN);
 
+    /**
+     * Si las puertas enlazadas están abiertas. Es lo único que decide el aspecto de la
+     * parte de abajo del panel: verde con el candado abierto, o rojo con el cerrado.
+     * Va aparte de PUZZLE_SOLVED a propósito: cerrar la puerta vuelve a poner el panel
+     * en rojo, pero el puzzle sigue resuelto y no hay que rehacerlo.
+     */
+    private static final EntityDataAccessor<Boolean> DOORS_OPEN =
+            SynchedEntityData.defineId(PanelCodigoEntity.class, EntityDataSerializers.BOOLEAN);
+
     // Los nombres tienen que coincidir con los de data/gww/hitboxes/panel_codigo.json.
     // Las cuatro figuras del panel son las mismas que las de la pared: triángulo,
     // hexágono, pentágono y cuadrado. No hay ningún círculo.
@@ -93,6 +102,16 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         builder.define(PUZZLE_LOCKED, false);
         builder.define(DATA_CORRECT_SEQUENCE, String.join(",", DEFAULT_SEQUENCE));
         builder.define(POWERED, false);
+        builder.define(DOORS_OPEN, false);
+    }
+
+    /** Estado visual del panel: verde/desbloqueado si las puertas están abiertas. */
+    public boolean areDoorsOpen() {
+        return this.entityData.get(DOORS_OPEN);
+    }
+
+    private void setDoorsOpen(boolean open) {
+        this.entityData.set(DOORS_OPEN, open);
     }
 
     // ---------- Power state ----------
@@ -185,12 +204,14 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         saveLinkedList(tag, "LinkedDoors", linkedDoors);
         tag.putString("CorrectSequence", this.entityData.get(DATA_CORRECT_SEQUENCE));
         tag.putBoolean("Powered", isPowered());
+        tag.putBoolean("DoorsOpen", areDoorsOpen());
     }
 
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         setSolved(tag.getBoolean("PuzzleSolved"));
+        setDoorsOpen(tag.getBoolean("DoorsOpen"));
         this.entityData.set(CURRENT_INPUT, tag.getString("CurrentInput"));
         setLocked(tag.getBoolean("PuzzleLocked"));
         this.lockTimer = tag.getInt("LockTimer");
@@ -417,6 +438,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         setSolved(false);
         setLocked(false);
         setCurrentInput(new ArrayList<>());
+        setDoorsOpen(false); // el panel vuelve a rojo/bloqueado
         lockTimer = 0;
         // No se actualizan puertas porque no está resuelto
     }
@@ -445,49 +467,30 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         return new ArrayList<>(linkedDoors);
     }
 
+    /** Al resolver el puzzle (o al recuperar la corriente ya resuelto) las puertas se abren. */
     public void updateAllLinkedDoors() {
-        if (linkedDoors.isEmpty() || !isSolved()) return;
-
-        Vec3 panelPos = this.position();
-        boolean shouldOpen = true; // siempre abrir si resuelto
-
-        for (Vec3 relPos : linkedDoors) {
-            Vec3 absolutePos = panelPos.add(relPos);
-
-            this.level().getEntitiesOfClass(PuertaMetalicaEntity.class,
-                            AABB.ofSize(absolutePos, 5, 5, 5),
-                            d -> d.position().distanceToSqr(absolutePos) < 3.0)
-                    .forEach(door -> door.setOpen(shouldOpen));
-        }
+        if (!isSolved()) return;
+        applyToLinkedDoors(true);
     }
 
+    /**
+     * El botón de estado abre y cierra las puertas una vez resuelto. Solo cambia la
+     * puerta y el aspecto del panel: el puzzle sigue resuelto y no se vuelve a pedir.
+     */
     private void toggleLinkedDoors() {
-        if (linkedDoors.isEmpty()) return;
+        applyToLinkedDoors(!areDoorsOpen());
+    }
+
+    private void applyToLinkedDoors(boolean open) {
+        setDoorsOpen(open);
 
         Vec3 panelPos = this.position();
-        boolean currentState = false;
-
-        for (Vec3 relPos : linkedDoors) {
-            Vec3 absolutePos = panelPos.add(relPos);
-            List<PuertaMetalicaEntity> doors = this.level().getEntitiesOfClass(
-                    PuertaMetalicaEntity.class,
-                    AABB.ofSize(absolutePos, 5, 5, 5),
-                    d -> d.position().distanceToSqr(absolutePos) < 3.0);
-
-            if (!doors.isEmpty()) {
-                currentState = doors.get(0).isOpen();
-                break;
-            }
-        }
-
-        boolean newState = !currentState;
-
         for (Vec3 relPos : linkedDoors) {
             Vec3 absolutePos = panelPos.add(relPos);
             this.level().getEntitiesOfClass(PuertaMetalicaEntity.class,
                             AABB.ofSize(absolutePos, 5, 5, 5),
                             d -> d.position().distanceToSqr(absolutePos) < 3.0)
-                    .forEach(door -> door.setOpen(newState));
+                    .forEach(door -> door.setOpen(open));
         }
     }
 

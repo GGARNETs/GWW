@@ -92,7 +92,7 @@ public class ManivelaEntity extends BaseInteractiveEntity {
 
     @Override
     protected void onBound(Player player) {
-        player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 999999, 3, false, false));
+        player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 999999, 2, false, false));
     }
 
     @Override

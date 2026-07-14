@@ -254,7 +254,7 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
         player.addEffect(new MobEffectInstance(
                 MobEffects.MOVEMENT_SLOWDOWN,
                 999999,
-                3,
+                2,
                 false,
                 false
         ));

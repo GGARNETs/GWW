@@ -6,6 +6,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -35,8 +36,11 @@ public class ValvulaEntity extends BaseEntity {
             SynchedEntityData.defineId(ValvulaEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_CORRECT_STATE =
             SynchedEntityData.defineId(ValvulaEntity.class, EntityDataSerializers.INT);
-    private static final EntityDataAccessor<Integer> DATA_MAX_STATES =
-            SynchedEntityData.defineId(ValvulaEntity.class, EntityDataSerializers.INT);
+
+    /** Válvula cerrada del todo: no gira más hacia la izquierda. */
+    public static final int MIN_STATE = 0;
+    /** Válvula abierta del todo: no gira más hacia la derecha. */
+    public static final int MAX_STATE = 4;
 
     private static final RawAnimation IDLE_ANIM = RawAnimation.begin().thenLoop("animation.idle");
     private static final RawAnimation OPEN_ANIM = RawAnimation.begin().thenPlay("animation.open");
@@ -155,7 +159,6 @@ public class ValvulaEntity extends BaseEntity {
         builder.define(DATA_STATE, 0);
         builder.define(DATA_HAS_MANIVELA, false);
         builder.define(DATA_CORRECT_STATE, 3);
-        builder.define(DATA_MAX_STATES, 4);
     }
 
     @Override
@@ -170,7 +173,6 @@ public class ValvulaEntity extends BaseEntity {
         }
         tag.put("ParticleEmitters", emitterList);
         tag.putInt("CorrectState", getCorrectState());
-        tag.putInt("MaxStates", getMaxStates());
     }
 
     @Override
@@ -187,23 +189,19 @@ public class ValvulaEntity extends BaseEntity {
             }
         }
         setCorrectState(tag.getInt("CorrectState"));
-        setMaxStates(tag.getInt("MaxStates"));
     }
 
+    /** Estado en el que la presión se estabiliza y las partículas desaparecen. */
     public int getCorrectState() {
         return this.entityData.get(DATA_CORRECT_STATE);
     }
 
     public void setCorrectState(int correctState) {
-        this.entityData.set(DATA_CORRECT_STATE, Math.max(0, correctState));
+        this.entityData.set(DATA_CORRECT_STATE, clampState(correctState));
     }
 
-    public int getMaxStates() {
-        return this.entityData.get(DATA_MAX_STATES);
-    }
-
-    public void setMaxStates(int maxStates) {
-        this.entityData.set(DATA_MAX_STATES, Math.max(1, maxStates));
+    private static int clampState(int state) {
+        return Math.max(MIN_STATE, Math.min(MAX_STATE, state));
     }
 
     public ValvulaType getValType() {
@@ -219,8 +217,7 @@ public class ValvulaEntity extends BaseEntity {
     }
 
     public void setState(int state) {
-        int max = getMaxStates() - 1;
-        this.entityData.set(DATA_STATE, Math.max(0, Math.min(max, state)));
+        this.entityData.set(DATA_STATE, clampState(state));
     }
 
     public boolean hasManivela() {
@@ -231,8 +228,12 @@ public class ValvulaEntity extends BaseEntity {
         this.entityData.set(DATA_HAS_MANIVELA, has);
     }
 
+    /**
+     * La presión solo se corta en el estado exacto: pasarse de vuelta también deja
+     * escapar el vapor. Hay que acertar, no simplemente abrir del todo.
+     */
     public boolean areParticlesActive() {
-        return getState() < getCorrectState();
+        return getState() != getCorrectState();
     }
 
     public List<ParticleEmitter> getParticleEmitters() {
@@ -420,11 +421,10 @@ public class ValvulaEntity extends BaseEntity {
         if (level instanceof ServerLevel) triggerAnim("close_controller", "close");
     }
 
+    /** Clic derecho: gira en el sentido de las agujas del reloj, es decir, abre. */
     @Override
     public void handleNormalInteract(Player player) {
-        if (!hasManivela()) return;
-        increaseState();
-        NoiseDetectionSystem.addNoise(player, 0.5f);
+        turn(player, 1);
     }
 
     @Override
@@ -432,30 +432,57 @@ public class ValvulaEntity extends BaseEntity {
         return !(entity instanceof Player);
     }
 
+    /** Clic izquierdo: gira en sentido contrario a las agujas del reloj, o sea, cierra. */
     @Override
     public boolean hurt(DamageSource damageSource, float amount) {
-        if (damageSource.getEntity() instanceof Player attacker && hasManivela()) {
-            if (!this.level().isClientSide) decreaseState();
-            NoiseDetectionSystem.addNoise(attacker, 0.5f);
-            return false;
+        if (damageSource.getEntity() instanceof Player attacker) {
+            if (!this.level().isClientSide) {
+                turn(attacker, -1);
+            }
+            return false; // la válvula no recibe daño, solo gira
         }
         return super.hurt(damageSource, amount);
     }
 
-    private void increaseState() {
-        int currentState = getState();
-        int maxStateIndex = getMaxStates() - 1;
-        if (currentState < maxStateIndex) {
-            setState(currentState + 1);
-            triggerTurnUpAnim(this.level());
+    /**
+     * Gira la válvula un paso: delta +1 la abre y -1 la cierra. Sin manivela no se
+     * mueve, y en los topes (0 cerrada, {@value #MAX_STATE} abierta) no pasa de ahí.
+     */
+    private void turn(Player player, int delta) {
+        if (this.level().isClientSide) {
+            return;
         }
-    }
 
-    private void decreaseState() {
-        int currentState = getState();
-        if (currentState > 0) {
-            setState(currentState - 1);
+        if (!hasManivela()) {
+            actionBar(player, "§cLa válvula no tiene manivela: no puedes girarla.");
+            return;
+        }
+
+        int next = getState() + delta;
+        if (next < MIN_STATE) {
+            actionBar(player, "§cLa válvula ya está cerrada del todo.");
+            return;
+        }
+        if (next > MAX_STATE) {
+            actionBar(player, "§cLa válvula ya está abierta del todo.");
+            return;
+        }
+
+        setState(next);
+        if (delta > 0) {
+            triggerTurnUpAnim(this.level());
+        } else {
             triggerTurnDownAnim(this.level());
         }
+        NoiseDetectionSystem.addNoise(player, 0.5f);
+
+        actionBar(player, "§eVálvula §f" + next + "§7/" + MAX_STATE + " §8· "
+                + (areParticlesActive()
+                ? "§cla presión sigue escapando"
+                : "§a¡la presión se ha estabilizado!"));
+    }
+
+    private static void actionBar(Player player, String message) {
+        player.displayClientMessage(Component.literal(message), true);
     }
 }

@@ -69,10 +69,12 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         // Accionar el interruptor es uno de los dos únicos momentos en los que la luz
         // puede cambiar. El otro (alguien entra o sale de la arena) lo lleva
         // ArenaManager, así que aquí no hace falta comprobar nada por tick.
+        // Se recalcula en vez de usar 'nowOn' a secas porque un panel de energía con el
+        // cable cortado manda sobre el interruptor: encenderlo no devuelve la luz.
         if (!this.level().isClientSide) {
             Arena arena = ArenaManager.getArenaAt(this.position());
             if (arena != null) {
-                ArenaLight.refresh(this.level(), arena, nowOn);
+                ArenaLight.refresh(this.level(), arena, ArenaLight.isOn(this.level(), arena));
             }
         }
     }

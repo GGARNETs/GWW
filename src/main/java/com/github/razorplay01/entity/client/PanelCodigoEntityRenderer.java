@@ -17,15 +17,15 @@ public class PanelCodigoEntityRenderer extends GeoEntityRenderer<PanelCodigoEnti
                         "encendido_abierto"
                 ),
                 (bone, entity, partialTick) -> {
-                    // Ahora usamos los estados separados: powered y solved
-                    boolean powered = entity.isPowered();
-                    boolean solved = entity.isSolved();
+                    // El candado de abajo sigue a la PUERTA, no al puzzle: verde abierto
+                    // mientras la puerta lo esté, rojo en cuanto se vuelva a cerrar. El
+                    // puzzle sigue resuelto por dentro; esto es solo el aspecto.
                     String name = bone.getName();
 
-                    boolean shouldShow = false;
-                    if (!powered) {
+                    boolean shouldShow;
+                    if (!entity.isPowered()) {
                         shouldShow = name.equalsIgnoreCase("apagado");
-                    } else if (solved) {
+                    } else if (entity.areDoorsOpen()) {
                         shouldShow = name.equalsIgnoreCase("encendido_abierto");
                     } else {
                         shouldShow = name.equalsIgnoreCase("encendido_cerrado");

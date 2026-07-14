@@ -200,6 +200,16 @@ public class EscapeRoomConfigCommand {
                                         .then(Commands.literal("clearparticles")
                                                 .executes(EscapeRoomConfigCommand::clearParticleEmitters)
                                         )
+                                        // Estado en el que la presión se estabiliza (0 = cerrada, 4 = abierta)
+                                        .then(Commands.literal("setcorrect")
+                                                .then(Commands.argument("estado", IntegerArgumentType.integer(
+                                                                ValvulaEntity.MIN_STATE, ValvulaEntity.MAX_STATE))
+                                                        .executes(EscapeRoomConfigCommand::setValvulaCorrectState)
+                                                )
+                                        )
+                                        .then(Commands.literal("info")
+                                                .executes(EscapeRoomConfigCommand::valvulaInfo)
+                                        )
                                 )
                         )
                         // ========== PANEL_CODIGO ==========
@@ -742,7 +752,8 @@ public class EscapeRoomConfigCommand {
             return 1;
         }
         StringBuilder sb = new StringBuilder("§6=== Emisores de Partículas ===\n");
-        sb.append("§7State: ").append(valvula.getState()).append("/3");
+        sb.append("§7Estado: ").append(valvula.getState()).append("/").append(ValvulaEntity.MAX_STATE);
+        sb.append(" (correcto: ").append(valvula.getCorrectState()).append(")");
         sb.append(" | Activas: ").append(valvula.areParticlesActive() ? "§aSí" : "§cNo").append("\n\n");
         for (int i = 0; i < emitters.size(); i++) {
             ValvulaEntity.ParticleEmitter e = emitters.get(i);
@@ -779,6 +790,32 @@ public class EscapeRoomConfigCommand {
         int count = valvula.getParticleEmitters().size();
         valvula.clearParticleEmitters();
         sendSuccess(ctx, "§a✔ " + count + " emisores eliminados.");
+        return 1;
+    }
+
+    private static int setValvulaCorrectState(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ValvulaEntity valvula = getEntityOfType(ctx, "valvula", ValvulaEntity.class, NOT_VALVULA);
+        if (valvula == null) return 0;
+
+        int estado = IntegerArgumentType.getInteger(ctx, "estado");
+        valvula.setCorrectState(estado);
+
+        sendSuccess(ctx, "§a✔ Válvula §6" + valvula.getValType().name()
+                + "§a: estado correcto = §f" + estado + "§7/" + ValvulaEntity.MAX_STATE
+                + "\n§7La presión se cortará solo cuando esté justo en ese estado.");
+        return 1;
+    }
+
+    private static int valvulaInfo(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ValvulaEntity valvula = getEntityOfType(ctx, "valvula", ValvulaEntity.class, NOT_VALVULA);
+        if (valvula == null) return 0;
+
+        sendInfo(ctx, "§6=== Válvula " + valvula.getValType().name() + " ===");
+        sendInfo(ctx, "§eManivela: " + (valvula.hasManivela() ? "§apuesta" : "§cno tiene (no gira)"));
+        sendInfo(ctx, "§eEstado actual: §f" + valvula.getState() + "§7/" + ValvulaEntity.MAX_STATE);
+        sendInfo(ctx, "§eEstado correcto: §f" + valvula.getCorrectState() + "§7/" + ValvulaEntity.MAX_STATE);
+        sendInfo(ctx, "§ePresión: " + (valvula.areParticlesActive() ? "§cescapando" : "§aestabilizada"));
+        sendInfo(ctx, "§eEmisores: §f" + valvula.getParticleEmitters().size());
         return 1;
     }
 
