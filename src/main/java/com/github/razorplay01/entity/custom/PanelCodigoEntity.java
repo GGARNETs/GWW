@@ -29,6 +29,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
+
 import static com.github.razorplay01.entity.custom.util.Util.*;
 
 public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEntity<PanelCodigoEntity> {
@@ -175,6 +177,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
     // ---------- Tick ----------
     @Override
     public void tick() {
+        healHitboxes();
         super.tick();
 
         if (!this.level().isClientSide && isLocked()) {
@@ -184,6 +187,17 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
                 setCurrentInput(new ArrayList<>());
                 lockTimer = 0;
             }
+        }
+    }
+
+    private void healHitboxes() {
+        if (hitboxData != null && hitboxData.hasCustomParts()) {
+            return;
+        }
+        EntityHitboxData<PanelCodigoEntity> rebuilt = MultiPartHitboxes.rebuild(this);
+        if (rebuilt != null) {
+            hitboxData = rebuilt;
+            MultiPartHitboxes.registerParts(this);
         }
     }
 

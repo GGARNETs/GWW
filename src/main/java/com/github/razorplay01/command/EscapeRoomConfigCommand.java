@@ -5,10 +5,13 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
@@ -35,6 +38,9 @@ public class EscapeRoomConfigCommand {
     private static final String SUCCESS_LINK = "§a✓ Vinculado correctamente.";
     private static final String SUCCESS_UNLINK_ALL = "§aTodas las vinculaciones han sido eliminadas.";
 
+    private static final SuggestionProvider<CommandSourceStack> FUSE_COLORS =
+            (context, builder) -> SharedSuggestionProvider.suggest(new String[]{"rojo", "verde", "azul"}, builder);
+
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("escaperoom")
                 .requires(source -> source.hasPermission(2))
@@ -58,6 +64,17 @@ public class EscapeRoomConfigCommand {
                                         )
                                         .then(Commands.literal("list")
                                                 .executes(EscapeRoomConfigCommand::listPanelLinks)
+                                        )
+                                        .then(Commands.literal("setsolution")
+                                                .then(Commands.argument("puzzleId", IntegerArgumentType.integer(1, 2))
+                                                        .then(Commands.argument("color1", StringArgumentType.word()).suggests(FUSE_COLORS)
+                                                                .then(Commands.argument("color2", StringArgumentType.word()).suggests(FUSE_COLORS)
+                                                                        .then(Commands.argument("color3", StringArgumentType.word()).suggests(FUSE_COLORS)
+                                                                                .executes(EscapeRoomConfigCommand::setPanelSolution)
+                                                                        )
+                                                                )
+                                                        )
+                                                )
                                         )
                                 )
                         )
@@ -352,6 +369,8 @@ public class EscapeRoomConfigCommand {
             sendInfo(context, "§ePuertas: §f" + panel.getLinkedDoorsCount());
             sendInfo(context, "§ePuzzle 1 → " + panel.getLinkedCount(1) + " tortugas");
             sendInfo(context, "§ePuzzle 2 → " + panel.getLinkedCount(2) + " tortugas");
+            sendInfo(context, "§eSolución Puzzle 1: §f" + formatSolution(panel.getSolution(1)));
+            sendInfo(context, "§eSolución Puzzle 2: §f" + formatSolution(panel.getSolution(2)));
             return 1;
         } catch (Exception e) {
             sendFailure(context, "§cError: " + e.getMessage());
@@ -372,6 +391,53 @@ public class EscapeRoomConfigCommand {
             sendFailure(context, "§cError: " + e.getMessage());
             return 0;
         }
+    }
+
+    private static int setPanelSolution(CommandContext<CommandSourceStack> context) {
+        try {
+            PanelFusiblesEntity panel = getEntityOfType(context, "panel", PanelFusiblesEntity.class, NOT_PANEL_FUSIBLES);
+            if (panel == null) return 0;
+            int puzzleId = IntegerArgumentType.getInteger(context, "puzzleId");
+
+            int[] solution = new int[3];
+            String[] argNames = {"color1", "color2", "color3"};
+            for (int i = 0; i < 3; i++) {
+                String color = StringArgumentType.getString(context, argNames[i]);
+                int fuse = parseFuseColor(color);
+                if (fuse == PanelFusiblesEntity.FUSE_NONE) {
+                    sendFailure(context, "§cColor inválido: '" + color + "'. Usa rojo, verde o azul.");
+                    return 0;
+                }
+                solution[i] = fuse;
+            }
+
+            panel.setSolution(puzzleId, solution);
+            int baseSlot = (puzzleId == 1) ? 1 : 4;
+            sendSuccess(context, String.format("§a✓ Solución del Puzzle %d: slot %d = %s, slot %d = %s, slot %d = %s",
+                    puzzleId,
+                    baseSlot, PanelFusiblesEntity.getColorName(solution[0]),
+                    baseSlot + 1, PanelFusiblesEntity.getColorName(solution[1]),
+                    baseSlot + 2, PanelFusiblesEntity.getColorName(solution[2])));
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int parseFuseColor(String color) {
+        return switch (color.toLowerCase(java.util.Locale.ROOT)) {
+            case "rojo" -> PanelFusiblesEntity.FUSE_ROJO;
+            case "verde" -> PanelFusiblesEntity.FUSE_VERDE;
+            case "azul" -> PanelFusiblesEntity.FUSE_AZUL;
+            default -> PanelFusiblesEntity.FUSE_NONE;
+        };
+    }
+
+    private static String formatSolution(int[] solution) {
+        return PanelFusiblesEntity.getColorName(solution[0]) + ", "
+                + PanelFusiblesEntity.getColorName(solution[1]) + ", "
+                + PanelFusiblesEntity.getColorName(solution[2]);
     }
 
     // ==================== CUADRO ====================

@@ -4,6 +4,7 @@ import com.github.darkpred.morehitboxes.api.EntityHitboxData;
 import com.github.darkpred.morehitboxes.api.EntityHitboxDataFactory;
 import com.github.darkpred.morehitboxes.api.GeckoLibMultiPartEntity;
 import com.github.darkpred.morehitboxes.api.MultiPart;
+import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
 import com.github.razorplay01.item.ModItems;
 import lombok.Getter;
 import net.minecraft.core.Direction;
@@ -72,9 +73,12 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
             "fusil_4", "fusil_5", "fusil_6"
     };
 
-    private static final int[] PUZZLE_1_SOLUTION = {FUSE_ROJO, FUSE_VERDE, FUSE_AZUL};
+    private static final int[] DEFAULT_SOLUTION = {FUSE_ROJO, FUSE_VERDE, FUSE_AZUL};
 
-    private static final int[] PUZZLE_2_SOLUTION = {FUSE_ROJO, FUSE_VERDE, FUSE_AZUL};
+    // Solución configurable por panel vía /escaperoom config panel_fusible <panel> setsolution.
+    // Se persiste en NBT, así que sobrevive a reinicios y a capture/paste de instancias.
+    private int[] puzzle1Solution = DEFAULT_SOLUTION.clone();
+    private int[] puzzle2Solution = DEFAULT_SOLUTION.clone();
 
     public PanelFusiblesEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -209,9 +213,21 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
 
             AABB searchArea = AABB.ofSize(absoluteTargetPos, 5.0, 5.0, 5.0);
 
-            this.level().getEntitiesOfClass(LuzTortugaEntity.class, searchArea,
-                            t -> t.position().distanceToSqr(absoluteTargetPos) < 2.0)
-                    .forEach(t -> t.setState(targetState));
+            // Solo la tortuga más cercana a la posición guardada: si las tortugas de
+            // ambos puzzles están montadas juntas, actualizar todas las del área
+            // cambiaría también la del otro puzzle.
+            LuzTortugaEntity closest = null;
+            double closestDist = 2.0;
+            for (LuzTortugaEntity t : this.level().getEntitiesOfClass(LuzTortugaEntity.class, searchArea)) {
+                double dist = t.position().distanceToSqr(absoluteTargetPos);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closest = t;
+                }
+            }
+            if (closest != null) {
+                closest.setState(targetState);
+            }
         }
     }
 
@@ -220,7 +236,7 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
      */
     private boolean checkPuzzle1() {
         for (int i = 0; i < 3; i++) {
-            if (getFuseSlot(i) != PUZZLE_1_SOLUTION[i]) {
+            if (getFuseSlot(i) != puzzle1Solution[i]) {
                 return false;
             }
         }
@@ -232,11 +248,37 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
      */
     private boolean checkPuzzle2() {
         for (int i = 0; i < 3; i++) {
-            if (getFuseSlot(i + 3) != PUZZLE_2_SOLUTION[i]) {
+            if (getFuseSlot(i + 3) != puzzle2Solution[i]) {
                 return false;
             }
         }
         return true;
+    }
+
+    public int[] getSolution(int puzzleId) {
+        return (puzzleId == 1 ? puzzle1Solution : puzzle2Solution).clone();
+    }
+
+    /**
+     * Cambia la combinación correcta del puzzle indicado y re-evalúa el estado con los
+     * fusibles ya colocados (tortugas y puertas se actualizan en consecuencia).
+     */
+    public void setSolution(int puzzleId, int[] solution) {
+        if (solution == null || solution.length != 3) return;
+        if (puzzleId == 1) {
+            puzzle1Solution = solution.clone();
+        } else {
+            puzzle2Solution = solution.clone();
+        }
+        reevaluatePuzzle(puzzleId);
+        updateAllLinkedDoors();
+    }
+
+    private void reevaluatePuzzle(int puzzleId) {
+        boolean allFilled = areAllSlotsFilled(puzzleId);
+        boolean solved = allFilled && (puzzleId == 1 ? checkPuzzle1() : checkPuzzle2());
+        entityData.set(puzzleId == 1 ? PUZZLE_1_SOLVED : PUZZLE_2_SOLVED, solved);
+        updateLinkedTurtles(puzzleId, solved ? 2 : (allFilled ? 1 : 0));
     }
 
     /**
@@ -334,13 +376,26 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
         };
     }
 
-    private String getColorName(int fuseType) {
+    public static String getColorName(int fuseType) {
         return switch (fuseType) {
             case FUSE_ROJO -> "Rojo";
             case FUSE_VERDE -> "Verde";
             case FUSE_AZUL -> "Azul";
             default -> "Desconocido";
         };
+    }
+
+    /**
+     * Lee una solución de 3 fusibles del NBT; si falta o es inválida conserva el fallback
+     * (paneles antiguos sin solución guardada siguen usando rojo, verde, azul).
+     */
+    private static int[] readSolution(CompoundTag tag, String key, int[] fallback) {
+        int[] loaded = tag.getIntArray(key);
+        if (loaded.length != 3) return fallback;
+        for (int fuse : loaded) {
+            if (fuse < FUSE_ROJO || fuse > FUSE_AZUL) return fallback;
+        }
+        return loaded;
     }
 
     public Direction getFacing() {
@@ -351,6 +406,23 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
         if (this.entityData.get(DATA_FACING) != direction) {
             this.entityData.set(DATA_FACING, direction);
             this.refreshDimensions();
+        }
+    }
+
+    @Override
+    public void tick() {
+        healHitboxes();
+        super.tick();
+    }
+
+    private void healHitboxes() {
+        if (hitboxData != null && hitboxData.hasCustomParts()) {
+            return;
+        }
+        EntityHitboxData<PanelFusiblesEntity> rebuilt = MultiPartHitboxes.rebuild(this);
+        if (rebuilt != null) {
+            hitboxData = rebuilt;
+            MultiPartHitboxes.registerParts(this);
         }
     }
 
@@ -474,6 +546,8 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
         tag.putString("Facing", getFacing().getSerializedName());
         tag.putBoolean("Puzzle1Solved", isPuzzle1Solved());
         tag.putBoolean("Puzzle2Solved", isPuzzle2Solved());
+        tag.putIntArray("Puzzle1Solution", puzzle1Solution);
+        tag.putIntArray("Puzzle2Solution", puzzle2Solution);
         saveLinkedList(tag, "LinkedDoors", linkedDoors);
         saveLinkedList(tag, "LinkedPuzzle1", linkedTurtlesPuzzle1);
         saveLinkedList(tag, "LinkedPuzzle2", linkedTurtlesPuzzle2);
@@ -497,6 +571,8 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
         if (tag.contains("Puzzle2Solved")) {
             entityData.set(PUZZLE_2_SOLVED, tag.getBoolean("Puzzle2Solved"));
         }
+        puzzle1Solution = readSolution(tag, "Puzzle1Solution", puzzle1Solution);
+        puzzle2Solution = readSolution(tag, "Puzzle2Solution", puzzle2Solution);
         linkedTurtlesPuzzle1.clear();
         linkedTurtlesPuzzle1.addAll(loadLinkedList(tag, "LinkedPuzzle1"));
 

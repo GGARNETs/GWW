@@ -5,6 +5,7 @@ import com.github.darkpred.morehitboxes.api.EntityHitboxDataFactory;
 import com.github.darkpred.morehitboxes.api.GeckoLibMultiPartEntity;
 import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.razorplay01.entity.BaseInteractiveEntity;
+import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -54,6 +55,7 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
 
     @Override
     public void tick() {
+        healHitboxes();
         super.tick();
 
         if (!isBound()) {
@@ -65,6 +67,17 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
         }
     }
 
+
+    private void healHitboxes() {
+        if (hitboxData != null && hitboxData.hasCustomParts()) {
+            return;
+        }
+        EntityHitboxData<EscaleraEntity> rebuilt = MultiPartHitboxes.rebuild(this);
+        if (rebuilt != null) {
+            hitboxData = rebuilt;
+            MultiPartHitboxes.registerParts(this);
+        }
+    }
 
     private void handleGravityAndMovement() {
         this.setNoGravity(false);
