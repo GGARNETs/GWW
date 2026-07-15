@@ -249,6 +249,20 @@ public class PuertaJaulaEntity extends BaseEntity {
         return PlayState.CONTINUE;
     }
 
+    /**
+     * Cierra la puerta si estaba abierta, dejando el candado como estaba (desbloqueado).
+     * Es lo que hace el Ublabla: la vuelve a cerrar, pero no la re-bloquea.
+     */
+    public void forceClose() {
+        if (this.level().isClientSide) {
+            return;
+        }
+        AnimState current = getAnimState();
+        if (current == AnimState.OPEN || current == AnimState.OPENING) {
+            startClosing();
+        }
+    }
+
     @Override
     public void handleNormalInteract(Player player) {
         if (player.level().isClientSide) return;

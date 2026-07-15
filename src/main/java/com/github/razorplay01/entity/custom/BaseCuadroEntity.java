@@ -214,6 +214,22 @@ public abstract class BaseCuadroEntity extends BaseInteractiveEntity implements 
         this.itemSpawned = false;
     }
 
+    /**
+     * Devuelve el cuadro a su posición y rotación iniciales sin tocar el progreso: si
+     * ya soltó su colgante, sigue soltado. Es lo que hace el Ublabla al ordenar la sala.
+     */
+    public void snapToInitial() {
+        if (this.level().isClientSide) {
+            return;
+        }
+        if (isBound()) {
+            unbind();
+        }
+        Vec3 initial = getInitialPosition();
+        this.moveTo(initial.x, initial.y, initial.z, getInitialYaw(), getInitialPitch());
+        this.setDeltaMovement(Vec3.ZERO);
+    }
+
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);

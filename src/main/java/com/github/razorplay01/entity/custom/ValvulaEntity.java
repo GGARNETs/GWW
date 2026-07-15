@@ -476,13 +476,33 @@ public class ValvulaEntity extends BaseEntity {
         }
         NoiseDetectionSystem.addNoise(player, 0.5f);
 
-        actionBar(player, "§eVálvula §f" + next + "§7/" + MAX_STATE + " §8· "
-                + (areParticlesActive()
-                ? "§cla presión sigue escapando"
-                : "§a¡la presión se ha estabilizado!"));
+        // Si al ajustar la presión esta válvula quedó en su sitio, las rejas a medio
+        // abrir de la zona vuelven a comprobar si ya pueden terminar de abrirse.
+        if (!areParticlesActive()) {
+            this.level().getEntitiesOfClass(RejaDuctoEntity.class,
+                            this.getBoundingBox().inflate(100), r -> true)
+                    .forEach(RejaDuctoEntity::notifyValvesChanged);
+        }
+
+        // Solo se avisa en los extremos; los estados intermedios se dejan en silencio
+        // para que dar con el punto correcto sea parte del misterio del puzzle.
+        if (next == MIN_STATE) {
+            actionBar(player, "§eLa válvula está cerrada del todo.");
+        } else if (next == MAX_STATE) {
+            actionBar(player, "§eLa válvula está abierta del todo.");
+        }
     }
 
     private static void actionBar(Player player, String message) {
         player.displayClientMessage(Component.literal(message), true);
+    }
+
+    /**
+     * True si todas las válvulas del área están en su estado correcto (sin presión).
+     * Si no hay ninguna válvula, se considera resuelto: una sala sin válvulas no
+     * bloquea nada.
+     */
+    public static boolean allSolved(Level level, net.minecraft.world.phys.AABB area) {
+        return level.getEntitiesOfClass(ValvulaEntity.class, area, ValvulaEntity::areParticlesActive).isEmpty();
     }
 }

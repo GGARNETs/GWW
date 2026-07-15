@@ -166,6 +166,22 @@ public class PalancaEntity extends BaseInteractiveEntity implements EscapeRoomPe
         this.entityData.set(PUZZLE_SOLVED, false);
     }
 
+    /**
+     * Devuelve la palanca a su posición inicial sin tocar el progreso del puzzle. Es lo
+     * que hace el Ublabla al ordenar la sala tras pillar a los jugadores.
+     */
+    public void snapToInitial() {
+        if (this.level().isClientSide) {
+            return;
+        }
+        if (isBound()) {
+            unbind();
+        }
+        Vec3 initial = getInitialPosition();
+        this.moveTo(initial.x, initial.y, initial.z, this.getYRot(), this.getXRot());
+        this.setDeltaMovement(Vec3.ZERO);
+    }
+
     @Override
     public void handleNormalInteract(Player player) {
         super.handleNormalInteract(player);

@@ -494,6 +494,17 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         }
     }
 
+    /**
+     * Cierra las puertas enlazadas sin tocar el puzzle: sigue resuelto, solo que la
+     * puerta vuelve a estar cerrada. Lo usa el Ublabla al ordenar la sala, y como una
+     * pulsación del botón vuelve a abrirla, no hay que resolver nada de nuevo.
+     */
+    public void closeDoorsKeepingSolved() {
+        if (areDoorsOpen()) {
+            applyToLinkedDoors(false);
+        }
+    }
+
     // ---------- Métodos requeridos por interfaces ----------
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {

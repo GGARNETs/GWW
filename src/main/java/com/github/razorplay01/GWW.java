@@ -1,6 +1,7 @@
 package com.github.razorplay01;
 
 import com.github.razorplay01.arena.ArenaManager;
+import com.github.razorplay01.arena.EscapeRoomController;
 import com.github.razorplay01.cam.starup.AnnotationFinder;
 import com.github.razorplay01.client.ClientNoiseState;
 import com.github.razorplay01.client.render.NoiseHudRenderer;
@@ -53,6 +54,7 @@ public class GWW implements ModInitializer, ClientModInitializer {
         ArenaManager.load();
         ServerTickEvents.START_SERVER_TICK.register(server -> {
             ArenaManager.tickGroups(server);
+            EscapeRoomController.tick(server);
             if (currentGame != null && currentGame.isActive()) {
                 boolean sigue = currentGame.tick(server);
                 if (!sigue) {

@@ -280,6 +280,8 @@ public class ArenaManager {
     public static void setRunning(String id, boolean running) {
         if (running) {
             RUNNING.add(id);
+            // Arrancar es empezar una partida nueva: se rearma la victoria y el aviso.
+            EscapeRoomController.onArenaStarted(id);
         } else {
             RUNNING.remove(id);
         }

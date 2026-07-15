@@ -2,6 +2,7 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.entity.custom.util.Util;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -25,13 +26,22 @@ import java.util.List;
 
 public class RejaDuctoEntity extends BaseEntity {
 
-    private static final EntityDataAccessor<Boolean> IS_OPEN = SynchedEntityData.defineId(
-            RejaDuctoEntity.class, EntityDataSerializers.BOOLEAN);
+    /** Alcance en el que la reja busca válvulas para saber si la presión ya está bien. */
+    private static final double VALVE_SEARCH_RANGE = 100.0;
+
+    public static final int STATE_CLOSED = 0;
+    /** A medio abrir: sin corriente pero con la presión aún sin ajustar. No deja pasar. */
+    public static final int STATE_SEMI_OPEN = 1;
+    public static final int STATE_OPEN = 2;
+
+    private static final EntityDataAccessor<Integer> DATA_STATE = SynchedEntityData.defineId(
+            RejaDuctoEntity.class, EntityDataSerializers.INT);
 
     private static final EntityDataAccessor<Direction> DATA_FACING =
             SynchedEntityData.defineId(RejaDuctoEntity.class, EntityDataSerializers.DIRECTION);
 
     private static final RawAnimation ANIMATION_IDLE = RawAnimation.begin().thenLoop("animation.idle");
+    private static final RawAnimation ANIMATION_SEMI_OPEN = RawAnimation.begin().thenPlayAndHold("animation.semi_open");
     private static final RawAnimation ANIMATION_OPEN = RawAnimation.begin().thenPlayAndHold("animation.open");
 
     private final List<Vec3> linkedPowerPanels = new ArrayList<>();
@@ -43,16 +53,29 @@ public class RejaDuctoEntity extends BaseEntity {
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
-        builder.define(IS_OPEN, false);
+        builder.define(DATA_STATE, STATE_CLOSED);
         builder.define(DATA_FACING, Direction.NORTH);
     }
 
+    public int getRejaState() {
+        return this.entityData.get(DATA_STATE);
+    }
+
+    public void setRejaState(int state) {
+        this.entityData.set(DATA_STATE, state);
+    }
+
+    /** Solo cuenta como "abierta" (deja pasar) el estado totalmente abierto. */
     public boolean isOpen() {
-        return this.entityData.get(IS_OPEN);
+        return getRejaState() == STATE_OPEN;
+    }
+
+    public boolean isSemiOpen() {
+        return getRejaState() == STATE_SEMI_OPEN;
     }
 
     public void setOpen(boolean open) {
-        this.entityData.set(IS_OPEN, open);
+        setRejaState(open ? STATE_OPEN : STATE_CLOSED);
     }
 
     public Direction getFacing() {
@@ -115,24 +138,51 @@ public class RejaDuctoEntity extends BaseEntity {
         return false;
     }
 
+    /** True si todas las válvulas de la zona ya están en su estado correcto. */
+    private boolean valvesSolved() {
+        return ValvulaEntity.allSolved(this.level(), this.getBoundingBox().inflate(VALVE_SEARCH_RANGE));
+    }
+
     /**
-     * Método llamado automáticamente cuando el panel se activa
+     * Se llama cuando el panel de energía corta la corriente. Si las válvulas ya
+     * están ajustadas, la reja se abre del todo (como siempre). Si no, queda a medio
+     * abrir: la presión no deja pasar hasta que se resuelvan las válvulas.
      */
     public void tryOpenAutomatically() {
-        if (!isOpen() && isPowerPanelActive()) {
-            setOpen(true);
+        if (isOpen() || !isPowerPanelActive()) {
+            return;
+        }
+        setRejaState(valvesSolved() ? STATE_OPEN : STATE_SEMI_OPEN);
+    }
+
+    /**
+     * Aviso desde una válvula de que ha cambiado de estado: si la reja estaba a medio
+     * abrir y ya no queda presión, termina de abrirse.
+     */
+    public void notifyValvesChanged() {
+        if (isSemiOpen() && valvesSolved()) {
+            setRejaState(STATE_OPEN);
         }
     }
 
     @Override
     public void handleNormalInteract(Player player) {
-      // []
+        if (this.level().isClientSide || !isSemiOpen()) {
+            return;
+        }
+        // Por si las válvulas se resolvieron entre medias, se recomprueba al interactuar.
+        if (valvesSolved()) {
+            setRejaState(STATE_OPEN);
+        } else {
+            player.displayClientMessage(Component.literal(
+                    "§cLa presión es demasiada para pasar. Ajusta las válvulas."), true);
+        }
     }
 
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-        tag.putBoolean("IsOpen", isOpen());
+        tag.putInt("State", getRejaState());
         tag.putString("Facing", getFacing().getSerializedName());
         Util.saveLinkedList(tag, "LinkedPowerPanels", linkedPowerPanels);
     }
@@ -140,7 +190,12 @@ public class RejaDuctoEntity extends BaseEntity {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        setOpen(tag.getBoolean("IsOpen"));
+        // "State" es el formato nuevo; los .dat viejos solo traían el booleano "IsOpen".
+        if (tag.contains("State")) {
+            setRejaState(tag.getInt("State"));
+        } else {
+            setOpen(tag.getBoolean("IsOpen"));
+        }
         if (tag.contains("Facing")) {
             Direction dir = Direction.byName(tag.getString("Facing"));
             if (dir != null) setFacing(dir);
@@ -160,7 +215,15 @@ public class RejaDuctoEntity extends BaseEntity {
                 this,
                 "reja_controller",
                 0,
-                state -> isOpen() ? state.setAndContinue(ANIMATION_OPEN) : state.setAndContinue(ANIMATION_IDLE)
+                state -> {
+                    if (isOpen()) {
+                        return state.setAndContinue(ANIMATION_OPEN);
+                    }
+                    if (isSemiOpen()) {
+                        return state.setAndContinue(ANIMATION_SEMI_OPEN);
+                    }
+                    return state.setAndContinue(ANIMATION_IDLE);
+                }
         ));
     }
 
@@ -191,7 +254,7 @@ public class RejaDuctoEntity extends BaseEntity {
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
-        if (IS_OPEN.equals(key) || DATA_FACING.equals(key)) {
+        if (DATA_STATE.equals(key) || DATA_FACING.equals(key)) {
             this.refreshDimensions();
         }
     }

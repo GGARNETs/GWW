@@ -3,6 +3,7 @@ package com.github.razorplay01;
 import com.github.razorplay01.arena.Arena;
 import com.github.razorplay01.arena.ArenaLight;
 import com.github.razorplay01.arena.ArenaManager;
+import com.github.razorplay01.arena.EscapeRoomController;
 import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.entity.custom.UblablaEntity;
 import com.github.razorplay01.instance.Instance;
@@ -98,6 +99,34 @@ public class EscapeRoomCommands {
                         .then(Commands.argument("instance", StringArgumentType.word())
                                 .suggests(INSTANCE_NAMES)
                                 .executes(EscapeRoomCommands::info)
+                        )
+                )
+
+                // Definir la zona de meta de una instance (coords donde está capturada)
+                .then(Commands.literal("setmeta")
+                        .then(Commands.argument("instance", StringArgumentType.word())
+                                .suggests(INSTANCE_NAMES)
+                                .then(Commands.argument("min", BlockPosArgument.blockPos())
+                                        .then(Commands.argument("max", BlockPosArgument.blockPos())
+                                                .executes(EscapeRoomCommands::setMeta)
+                                        )
+                                )
+                        )
+                )
+
+                // Quitar la meta de una instance
+                .then(Commands.literal("clearmeta")
+                        .then(Commands.argument("instance", StringArgumentType.word())
+                                .suggests(INSTANCE_NAMES)
+                                .executes(EscapeRoomCommands::clearMeta)
+                        )
+                )
+
+                // Ver la zona de meta ya colocada en una arena (contorno de partículas)
+                .then(Commands.literal("showmeta")
+                        .then(Commands.argument("arena", StringArgumentType.word())
+                                .suggests(ARENA_IDS)
+                                .executes(EscapeRoomCommands::showMeta)
                         )
                 )
 
@@ -385,6 +414,10 @@ public class EscapeRoomCommands {
                         + " §7(radio " + instance.getRadius() + ")"), false);
         source.sendSuccess(() -> Component.literal(
                 "§eEntidades: §f" + instance.getEntities().size()), false);
+        source.sendSuccess(() -> Component.literal(
+                "§eMeta: §f" + (instance.hasMeta()
+                        ? instance.getMetaMin().toShortString() + " -> " + instance.getMetaMax().toShortString() + " §7(relativa)"
+                        : "§7sin definir")), false);
 
         Map<String, Integer> byType = new HashMap<>();
         instance.getEntities().forEach(snapshot ->
@@ -392,6 +425,98 @@ public class EscapeRoomCommands {
         byType.forEach((type, count) -> source.sendSuccess(() -> Component.literal(
                 "  §7- " + type + ": §f" + count), false));
 
+        return 1;
+    }
+
+    private static int setMeta(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "instance");
+        CommandSourceStack source = context.getSource();
+
+        Instance instance = requireInstance(name, source);
+        if (instance == null) {
+            return 0;
+        }
+
+        BlockPos min = BlockPosArgument.getBlockPos(context, "min");
+        BlockPos max = BlockPosArgument.getBlockPos(context, "max");
+
+        // La meta se guarda relativa al origen de la ARENA donde caen esas coordenadas,
+        // no al de captura: así la caja se reconstruye justo donde la pusiste. Si las
+        // coordenadas no caen en ninguna arena que use esta instance, se usa el origen
+        // de captura como referencia.
+        BlockPos reference = instance.getOrigin();
+        for (Arena arena : ArenaManager.getAll()) {
+            if (arena.getInstanceName().equals(name)
+                    && arena.getZoneAABB().contains(net.minecraft.world.phys.Vec3.atCenterOf(min))) {
+                reference = arena.getOrigin();
+                break;
+            }
+        }
+        instance.setMeta(reference, min, max);
+
+        try {
+            InstanceManager.save(name, instance);
+        } catch (IOException e) {
+            source.sendFailure(Component.literal("§cError al guardar la instance: " + e.getMessage()));
+            return 0;
+        }
+
+        BlockPos ref = reference;
+        source.sendSuccess(() -> Component.literal(
+                "§aMeta de '" + name + "' definida: " + min.toShortString() + " -> " + max.toShortString()
+                        + "\n§7Relativa al origen " + ref.toShortString()
+                        + ". Compruébala con /escaperoom showmeta <arena>."), true);
+        return 1;
+    }
+
+    private static int clearMeta(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "instance");
+        CommandSourceStack source = context.getSource();
+
+        Instance instance = requireInstance(name, source);
+        if (instance == null) {
+            return 0;
+        }
+        if (!instance.hasMeta()) {
+            source.sendFailure(Component.literal("§cLa instance '" + name + "' no tiene meta."));
+            return 0;
+        }
+
+        instance.clearMeta();
+        try {
+            InstanceManager.save(name, instance);
+        } catch (IOException e) {
+            source.sendFailure(Component.literal("§cError al guardar la instance: " + e.getMessage()));
+            return 0;
+        }
+
+        source.sendSuccess(() -> Component.literal("§cMeta de '" + name + "' eliminada."), true);
+        return 1;
+    }
+
+    private static int showMeta(CommandContext<CommandSourceStack> context) {
+        String arenaId = StringArgumentType.getString(context, "arena");
+        CommandSourceStack source = context.getSource();
+
+        Arena arena = requireArena(arenaId, source);
+        if (arena == null) {
+            return 0;
+        }
+        Instance instance = InstanceManager.get(arena.getInstanceName());
+        if (instance == null || !instance.hasMeta()) {
+            source.sendFailure(Component.literal(
+                    "§cLa instance '" + arena.getInstanceName() + "' no tiene meta. "
+                            + "Defínela con /escaperoom setmeta " + arena.getInstanceName() + " <min> <max>."));
+            return 0;
+        }
+
+        net.minecraft.world.phys.AABB box = instance.resolveMetaBox(arena.getOrigin());
+        EscapeRoomController.showMetaPreview(source.getLevel(), arenaId, box, 100); // 5 s
+
+        source.sendSuccess(() -> Component.literal(
+                "§aMostrando la meta de '" + arenaId + "' durante 5 s: "
+                        + String.format("[%.0f, %.0f, %.0f] -> [%.0f, %.0f, %.0f]",
+                        box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ)), true);
         return 1;
     }
 

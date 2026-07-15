@@ -2,6 +2,7 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.config.GwwSettings;
+import com.github.razorplay01.integration.GeoWarePointsIntegration;
 import com.github.razorplay01.entity.custom.util.EscapeRoomPersistable;
 import com.github.razorplay01.entity.custom.util.PuzzleEntityChecker;
 import com.github.razorplay01.system.NoiseDetectionSystem;
@@ -57,6 +58,8 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     private static final int CHASE_MAX_DURATION = 200;
     private static final int NOISE_CHECK_INTERVAL = 12;
     private static final double CATCH_DISTANCE_SQ = 5.29;
+    /** Puntos que pierde cada jugador al que el Ublabla devuelve a la jaula. */
+    private static final int JAIL_POINTS_PENALTY = -50;
     private static final double LOSE_TARGET_DISTANCE_SQ = 2500.0;
 
     @Getter
@@ -353,7 +356,41 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         setState(STATE_ATTACKING);
         playPunishSound();
         teleportPlayersToJail();
+        restoreRoomState();
         resetToPatrol();
+    }
+
+    /**
+     * Ordena la sala tras pillar a los jugadores: devuelve a su sitio solo lo que está
+     * fuera de lugar (cuadros y palancas movidos, puertas abiertas, interruptores
+     * encendidos), sin deshacer nada del progreso resuelto — los colgantes ya soltados
+     * siguen soltados, los cables se quedan como están y los candados desbloqueados.
+     */
+    private void restoreRoomState() {
+        if (level().isClientSide) {
+            return;
+        }
+        AABB area = buildPatrolArea();
+        Level level = level();
+
+        level.getEntitiesOfClass(BaseCuadroEntity.class, area, BaseCuadroEntity::hasBeenMoved)
+                .forEach(BaseCuadroEntity::snapToInitial);
+        level.getEntitiesOfClass(PalancaEntity.class, area, PalancaEntity::hasBeenMoved)
+                .forEach(PalancaEntity::snapToInitial);
+
+        // Interruptores encendidos: se bajan. Los cables se quedan en su orden correcto.
+        level.getEntitiesOfClass(InterruptorIndustrialEntity.class, area, InterruptorIndustrialEntity::isOn)
+                .forEach(interruptor -> interruptor.setState(0));
+
+        // Puertas de código: se cierran dejando el puzzle resuelto (una pulsación reabre).
+        level.getEntitiesOfClass(PanelCodigoEntity.class, area, p -> true)
+                .forEach(PanelCodigoEntity::closeDoorsKeepingSolved);
+
+        // Puertas abiertas: se vuelven a cerrar. La de la jaula conserva el candado.
+        level.getEntitiesOfClass(PuertaMetalicaEntity.class, area, PuertaMetalicaEntity::isOpen)
+                .forEach(door -> door.setOpen(false));
+        level.getEntitiesOfClass(PuertaJaulaEntity.class, area, PuertaJaulaEntity::isOpen)
+                .forEach(PuertaJaulaEntity::forceClose);
     }
 
     private void playPunishSound() {
@@ -449,6 +486,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         setState(STATE_ATTACKING);
         playPunishSound();
         teleportPlayersToJail();
+        restoreRoomState();
         resetToPatrol();
     }
 
@@ -465,6 +503,20 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         investigationTimer = 0;
         checkWaitTimer = 0;
         broadcastMessage("Volviendo a mi puesto...");
+    }
+
+    /**
+     * Alerta al Ublabla para que venga a investigar un punto. Se usa en el aviso de
+     * escape para meter presión. Solo tiene efecto si está patrullando tranquilo.
+     */
+    public void alertTo(BlockPos target) {
+        if (getState() != STATE_PATROL) {
+            return;
+        }
+        setInvestigationTarget(target);
+        setState(STATE_ALERT);
+        alertTimer = 0;
+        broadcastMessage("¿Qué está pasando ahí?");
     }
 
     private void teleportPlayersToJail() {
@@ -490,6 +542,8 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
             if (p instanceof ServerPlayer sp) {
                 sp.teleportTo(destination.getX() + 0.5, destination.getY() + 1.0, destination.getZ() + 0.5);
                 sp.sendSystemMessage(Component.literal(message));
+                // Que te devuelvan a la jaula cuesta puntos a todos los descubiertos.
+                GeoWarePointsIntegration.award(sp, JAIL_POINTS_PENALTY);
             }
         }
     }

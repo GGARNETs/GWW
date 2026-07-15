@@ -63,6 +63,50 @@
 				}
 			}
 		},
+		"animation.semi_open": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.3,
+			"bones": {
+				"bone": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"0.3": {
+							"vector": [40, 0, 0]
+						}
+					},
+					"position": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"0.3": {
+							"vector": [0, -2, 0]
+						}
+					}
+				},
+				"bone2": {
+					"position": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"0.3": {
+							"vector": [0, 0, 1.2]
+						}
+					}
+				},
+				"bone3": {
+					"position": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"0.3": {
+							"vector": [0, 0, -1.2]
+						}
+					}
+				}
+			}
+		},
 		"animation.idle": {
 			"animation_length": 0.5,
 			"bones": {

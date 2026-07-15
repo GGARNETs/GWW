@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -26,6 +27,13 @@ public class Instance {
     private final int radius;
     private final List<EntitySnapshot> entities = new ArrayList<>();
 
+    /**
+     * Zona de meta, guardada relativa al origen (como el resto de la schematic) para
+     * que viaje con ella a cualquier arena. Null si esta instance no tiene meta.
+     */
+    private BlockPos metaMin;
+    private BlockPos metaMax;
+
     public Instance(BlockPos origin, int radius) {
         this.origin = origin;
         this.radius = radius;
@@ -33,6 +41,42 @@ public class Instance {
 
     public void add(EntitySnapshot snapshot) {
         entities.add(snapshot);
+    }
+
+    public boolean hasMeta() {
+        return metaMin != null && metaMax != null;
+    }
+
+    /**
+     * Define la meta a partir de coordenadas absolutas del mundo, guardándola relativa
+     * a {@code referenceOrigin} (normalmente el origen de la arena donde se está
+     * definiendo). Así {@link #resolveMetaBox} la reconstruye exactamente en ese punto
+     * y, a la vez, viaja a cualquier otra arena donde se pegue la instance.
+     */
+    public void setMeta(BlockPos referenceOrigin, BlockPos absMin, BlockPos absMax) {
+        this.metaMin = absMin.subtract(referenceOrigin);
+        this.metaMax = absMax.subtract(referenceOrigin);
+    }
+
+    public void clearMeta() {
+        this.metaMin = null;
+        this.metaMax = null;
+    }
+
+    /**
+     * Caja de la meta en coordenadas del mundo para una arena pegada en {@code arenaOrigin}.
+     * Devuelve null si esta instance no tiene meta. La meta se desplaza igual que los
+     * bloques al pegar: origen de la arena + desplazamiento relativo guardado.
+     */
+    public AABB resolveMetaBox(BlockPos arenaOrigin) {
+        if (!hasMeta()) {
+            return null;
+        }
+        BlockPos a = arenaOrigin.offset(metaMin);
+        BlockPos b = arenaOrigin.offset(metaMax);
+        return new AABB(
+                Math.min(a.getX(), b.getX()), Math.min(a.getY(), b.getY()), Math.min(a.getZ(), b.getZ()),
+                Math.max(a.getX(), b.getX()) + 1.0, Math.max(a.getY(), b.getY()) + 1.0, Math.max(a.getZ(), b.getZ()) + 1.0);
     }
 
     // Las claves NBT conservan el nombre "Center" para que los .dat capturados
@@ -49,6 +93,11 @@ public class Instance {
             list.add(snapshot.serialize());
         }
         tag.put("Entities", list);
+
+        if (hasMeta()) {
+            tag.put("MetaMin", saveBlockPos(metaMin));
+            tag.put("MetaMax", saveBlockPos(metaMax));
+        }
 
         return tag;
     }
@@ -68,7 +117,24 @@ public class Instance {
             instance.add(EntitySnapshot.deserialize(list.getCompound(i)));
         }
 
+        if (tag.contains("MetaMin") && tag.contains("MetaMax")) {
+            instance.metaMin = loadBlockPos(tag.getCompound("MetaMin"));
+            instance.metaMax = loadBlockPos(tag.getCompound("MetaMax"));
+        }
+
         return instance;
+    }
+
+    private static CompoundTag saveBlockPos(BlockPos pos) {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("X", pos.getX());
+        tag.putInt("Y", pos.getY());
+        tag.putInt("Z", pos.getZ());
+        return tag;
+    }
+
+    private static BlockPos loadBlockPos(CompoundTag tag) {
+        return new BlockPos(tag.getInt("X"), tag.getInt("Y"), tag.getInt("Z"));
     }
 
     @Getter
