@@ -64,6 +64,17 @@ public class Instance {
     }
 
     /**
+     * Copia la meta (ya relativa al origen) de otra instance. Se usa al sobrescribir
+     * una instance para no perder la zona de meta cuando la nueva captura no trae una
+     * propia: la meta es de la sala, no de una captura concreta. BlockPos es inmutable,
+     * así que compartir la referencia es seguro.
+     */
+    public void copyMetaFrom(Instance other) {
+        this.metaMin = other.metaMin;
+        this.metaMax = other.metaMax;
+    }
+
+    /**
      * Caja de la meta en coordenadas del mundo para una arena pegada en {@code arenaOrigin}.
      * Devuelve null si esta instance no tiene meta. La meta se desplaza igual que los
      * bloques al pegar: origen de la arena + desplazamiento relativo guardado.

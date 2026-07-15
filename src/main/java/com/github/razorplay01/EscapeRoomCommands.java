@@ -271,8 +271,19 @@ public class EscapeRoomCommands {
             return 0;
         }
 
-        boolean overwrite = InstanceManager.get(name) != null;
+        Instance previous = InstanceManager.get(name);
+        boolean overwrite = previous != null;
         Instance saved = clipboard;
+
+        // La meta es una propiedad de la instance (la zona de win viaja con ella a cada
+        // arena), no de una captura concreta. Si la sala ya tenía meta y esta captura no
+        // trae una propia, se conserva para no perderla al re-guardar.
+        boolean keptMeta = false;
+        if (previous != null && previous.hasMeta() && !saved.hasMeta()) {
+            saved.copyMetaFrom(previous);
+            keptMeta = true;
+        }
+
         try {
             InstanceManager.save(name, saved);
         } catch (IOException e) {
@@ -281,10 +292,12 @@ public class EscapeRoomCommands {
             return 0;
         }
 
+        boolean metaNote = keptMeta;
         source.sendSuccess(() -> Component.literal(
                 "§aInstance '" + name + "' " + (overwrite ? "sobrescrita" : "guardada")
                         + " §7(" + saved.getEntities().size() + " entidades) en "
                         + InstanceManager.getDirectory().resolve(name + ".dat")
+                        + (metaNote ? "\n§aMeta conservada de la versión anterior." : "")
         ), true);
         return 1;
     }
