@@ -5,6 +5,7 @@ import com.github.darkpred.morehitboxes.api.EntityHitboxDataFactory;
 import com.github.darkpred.morehitboxes.api.GeckoLibMultiPartEntity;
 import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
+import com.github.razorplay01.entity.custom.util.SelfHealingHitboxes;
 import com.github.razorplay01.item.ModItems;
 import lombok.Getter;
 import net.minecraft.core.Direction;
@@ -36,7 +37,7 @@ import static com.github.razorplay01.entity.custom.util.Util.loadLinkedList;
 import static com.github.razorplay01.entity.custom.util.Util.saveLinkedList;
 
 @Getter
-public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPartEntity<PanelFusiblesEntity> {
+public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPartEntity<PanelFusiblesEntity>, SelfHealingHitboxes {
     private EntityHitboxData<PanelFusiblesEntity> hitboxData;
 
     public static final int FUSE_NONE = 0;
@@ -411,11 +412,11 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
 
     @Override
     public void tick() {
-        healHitboxes();
         super.tick();
     }
 
-    private void healHitboxes() {
+    @Override
+    public void rebuildHitboxesIfMissing() {
         if (hitboxData != null && hitboxData.hasCustomParts()) {
             return;
         }

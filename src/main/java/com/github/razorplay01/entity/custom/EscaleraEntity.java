@@ -6,6 +6,7 @@ import com.github.darkpred.morehitboxes.api.GeckoLibMultiPartEntity;
 import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.razorplay01.entity.BaseInteractiveEntity;
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
+import com.github.razorplay01.entity.custom.util.SelfHealingHitboxes;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -23,7 +24,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMultiPartEntity<EscaleraEntity> {
+public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMultiPartEntity<EscaleraEntity>, SelfHealingHitboxes {
 
     private EntityHitboxData<EscaleraEntity> hitboxData;
 
@@ -55,7 +56,6 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
 
     @Override
     public void tick() {
-        healHitboxes();
         super.tick();
 
         if (!isBound()) {
@@ -68,7 +68,8 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
     }
 
 
-    private void healHitboxes() {
+    @Override
+    public void rebuildHitboxesIfMissing() {
         if (hitboxData != null && hitboxData.hasCustomParts()) {
             return;
         }

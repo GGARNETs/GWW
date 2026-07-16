@@ -31,10 +31,11 @@ import java.util.List;
 import java.util.Map;
 
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
+import com.github.razorplay01.entity.custom.util.SelfHealingHitboxes;
 
 import static com.github.razorplay01.entity.custom.util.Util.*;
 
-public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEntity<PanelCodigoEntity> {
+public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEntity<PanelCodigoEntity>, SelfHealingHitboxes {
     private EntityHitboxData<PanelCodigoEntity> hitboxData;
     private final List<Vec3> linkedDoors = new ArrayList<>();
 
@@ -229,7 +230,6 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
     // ---------- Tick ----------
     @Override
     public void tick() {
-        healHitboxes();
         super.tick();
 
         if (!this.level().isClientSide && isLocked()) {
@@ -242,7 +242,8 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         }
     }
 
-    private void healHitboxes() {
+    @Override
+    public void rebuildHitboxesIfMissing() {
         if (hitboxData != null && hitboxData.hasCustomParts()) {
             return;
         }

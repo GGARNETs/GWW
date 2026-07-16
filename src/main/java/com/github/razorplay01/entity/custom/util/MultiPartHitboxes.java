@@ -22,8 +22,10 @@ import net.minecraft.world.entity.Mob;
  * en memoria, spawns inmediatos) se rompen todas, y tras reiniciar el servidor
  * (chunks fríos, spawns tardíos) funcionan.
  * <p>
- * Estos helpers se llaman desde {@code tick()}: si la entidad no tiene parts pero
- * los datos ya llegaron, se reconstruyen y se re-registran.
+ * Estos helpers los invoca {@code HitboxDataLoaderMixin} en el momento exacto en que la
+ * data de morehitboxes aterriza en el cliente ({@code HitboxDataLoader.replaceData}), vía
+ * {@link SelfHealingHitboxes#rebuildHitboxesIfMissing()}: si la entidad no tiene parts pero
+ * los datos ya llegaron, se reconstruyen y se re-registran. (Antes se sondeaba cada tick.)
  */
 public final class MultiPartHitboxes {
     private MultiPartHitboxes() {
