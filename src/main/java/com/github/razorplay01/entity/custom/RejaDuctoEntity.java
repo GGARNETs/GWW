@@ -1,5 +1,6 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.entity.custom.util.Util;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -26,8 +27,11 @@ import java.util.List;
 
 public class RejaDuctoEntity extends BaseEntity {
 
-    /** Alcance en el que la reja busca válvulas para saber si la presión ya está bien. */
-    private static final double VALVE_SEARCH_RANGE = 100.0;
+    /**
+     * Margen de búsqueda de válvulas cuando la reja no está dentro de ninguna arena
+     * configurada. Dentro de una arena manda la zona de esa arena, no este número.
+     */
+    private static final double VALVE_SEARCH_FALLBACK = 32.0;
 
     public static final int STATE_CLOSED = 0;
     /** A medio abrir: sin corriente pero con la presión aún sin ajustar. No deja pasar. */
@@ -140,7 +144,8 @@ public class RejaDuctoEntity extends BaseEntity {
 
     /** True si todas las válvulas de la zona ya están en su estado correcto. */
     private boolean valvesSolved() {
-        return ValvulaEntity.allSolved(this.level(), this.getBoundingBox().inflate(VALVE_SEARCH_RANGE));
+        return ValvulaEntity.allSolved(this.level(), ArenaManager.searchAreaAround(
+                this.position(), this.getBoundingBox().inflate(VALVE_SEARCH_FALLBACK)));
     }
 
     /**

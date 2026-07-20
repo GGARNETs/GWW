@@ -9,6 +9,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -151,11 +153,15 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         if (areAllCablesReady()) {
             boolean newState = !isOn();
             setState(newState ? 1 : 0);
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                    "§6[Interruptor] §fActivado: §" + (newState ? "aON" : "cOFF")));
+            this.level().playSound(null, this.blockPosition(),
+                    SoundEvents.LEVER_CLICK, SoundSource.BLOCKS, 0.8F, newState ? 1.0F : 0.7F);
         } else {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                    "§c[Interruptor] No puedes activarlo. Todos los cables deben estar activos y en estado correcto."));
+            // Chispazo y aviso vago: que la palanca no responda es la pista, sin
+            // decirle al jugador que el fallo está en los cables.
+            this.level().playSound(null, this.blockPosition(),
+                    SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.6F);
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                    "§cNo pasa corriente."), true);
         }
     }
 

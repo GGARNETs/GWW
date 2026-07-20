@@ -1,5 +1,6 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.entity.custom.util.ValvulaType;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import net.minecraft.core.particles.ParticleTypes;
@@ -49,10 +50,18 @@ public class ValvulaEntity extends BaseEntity {
     private static final int PARTICLE_INTERVAL = 2;
     private static final int DIRECTION_EXPIRE_TICKS = 10;
 
+    /**
+     * Margen para avisar a las rejas cuando la válvula no está dentro de ninguna arena
+     * configurada. Dentro de una arena manda la zona de esa arena.
+     */
+    private static final double REJA_SEARCH_FALLBACK = 32.0;
+
     private final List<ParticleEmitter> particleEmitters = new ArrayList<>();
     private final Map<UUID, Vec3> playerEntryDirections = new HashMap<>();
     private final Map<UUID, Integer> playerLastSeenTick = new HashMap<>();
     private int particleTickCounter = 0;
+    /** Radio del emisor más ancho. -1 = hay que recalcularlo. */
+    private double maxEmitterRadius = -1;
 
     public static class ParticleEmitter {
         public double offsetX, offsetY, offsetZ;
@@ -188,6 +197,7 @@ public class ValvulaEntity extends BaseEntity {
                 particleEmitters.add(ParticleEmitter.load(emitterList.getCompound(i)));
             }
         }
+        maxEmitterRadius = -1;
         setCorrectState(tag.getInt("CorrectState"));
     }
 
@@ -248,16 +258,19 @@ public class ValvulaEntity extends BaseEntity {
 
     public void addParticleEmitter(ParticleEmitter emitter) {
         particleEmitters.add(emitter);
+        maxEmitterRadius = -1;
     }
 
     public void removeParticleEmitter(int index) {
         if (index >= 0 && index < particleEmitters.size()) {
             particleEmitters.remove(index);
+            maxEmitterRadius = -1;
         }
     }
 
     public void clearParticleEmitters() {
         particleEmitters.clear();
+        maxEmitterRadius = -1;
     }
 
     @Override
@@ -396,11 +409,14 @@ public class ValvulaEntity extends BaseEntity {
     }
 
     private double getMaxEmitterRadius() {
-        double max = 0;
-        for (ParticleEmitter emitter : particleEmitters) {
-            if (emitter.radius > max) max = emitter.radius;
+        if (maxEmitterRadius < 0) {
+            double max = 0;
+            for (ParticleEmitter emitter : particleEmitters) {
+                if (emitter.radius > max) max = emitter.radius;
+            }
+            maxEmitterRadius = max;
         }
-        return max;
+        return maxEmitterRadius;
     }
 
     @Override
@@ -478,9 +494,12 @@ public class ValvulaEntity extends BaseEntity {
 
         // Si al ajustar la presión esta válvula quedó en su sitio, las rejas a medio
         // abrir de la zona vuelven a comprobar si ya pueden terminar de abrirse.
+        // Se busca dentro de la arena: un radio fijo alcanzaría las rejas de la sala
+        // de al lado y las abriría sin que nadie hubiese tocado sus válvulas.
         if (!areParticlesActive()) {
             this.level().getEntitiesOfClass(RejaDuctoEntity.class,
-                            this.getBoundingBox().inflate(100), r -> true)
+                            ArenaManager.searchAreaAround(this.position(),
+                                    this.getBoundingBox().inflate(REJA_SEARCH_FALLBACK)))
                     .forEach(RejaDuctoEntity::notifyValvesChanged);
         }
 

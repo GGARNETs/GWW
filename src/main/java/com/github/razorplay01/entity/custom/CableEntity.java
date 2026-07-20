@@ -2,7 +2,6 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.item.ModItems;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -42,7 +41,6 @@ public class CableEntity extends BaseEntity {
         if (isActive()) {
             int nextState = (this.getState() + 1) % 4;
             this.setState(nextState);
-            player.sendSystemMessage(Component.literal("State: " + this.getState()));
         } else {
             if (getCableType() == 0 && player.getInventory().contains(new ItemStack(ModItems.CABLE_LINEAL))) {
                 consumeRequiredItem(player, ModItems.CABLE_LINEAL);

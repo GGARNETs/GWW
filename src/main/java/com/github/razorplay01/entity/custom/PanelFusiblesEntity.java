@@ -10,8 +10,9 @@ import com.github.razorplay01.item.ModItems;
 import lombok.Getter;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.InteractionHand;
@@ -283,69 +284,13 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
     }
 
     /**
-     * Verifica ambos puzzles y notifica al jugador.
-     * Se llama después de cada colocación/intercambio/retiro de fusible.
+     * Click seco al manipular un fusible. Es el único aviso que recibe el jugador:
+     * el resultado del puzzle se lee en las luces del panel, no en el chat.
      */
-    private void checkPuzzles(Player player, int slotIndex) {
-        boolean isPuzzle1Slot = slotIndex < 3;
-        int puzzleId = isPuzzle1Slot ? 1 : 2;
-
-        boolean puzzleSolved = false;
-        boolean allFilled = false;
-        int newState = 0; // default: incompleto
-
-        if (isPuzzle1Slot) {
-            // Puzzle 1
-            allFilled = hasSlot(0) && hasSlot(1) && hasSlot(2);
-            if (allFilled) {
-                if (checkPuzzle1()) {
-                    entityData.set(PUZZLE_1_SOLVED, true);
-                    puzzleSolved = true;
-                    newState = 2;
-                    player.sendSystemMessage(Component.literal("§a§l[Panel] ¡Puzzle 1 RESUELTO! §f✔"));
-                } else {
-                    entityData.set(PUZZLE_1_SOLVED, false);
-                    newState = 1; // combinación incorrecta
-                    player.sendSystemMessage(Component.literal("§c[Panel] Puzzle 1: Combinación incorrecta ✘"));
-                }
-            } else {
-                entityData.set(PUZZLE_1_SOLVED, false);
-                newState = 0; // incompleto
-                if (isPuzzle1Solved()) {
-                    player.sendSystemMessage(Component.literal("§c[Panel] Puzzle 1: Desactivado - faltan fusibles"));
-                }
-            }
-        } else {
-            // Puzzle 2
-            allFilled = hasSlot(3) && hasSlot(4) && hasSlot(5);
-            if (allFilled) {
-                if (checkPuzzle2()) {
-                    entityData.set(PUZZLE_2_SOLVED, true);
-                    puzzleSolved = true;
-                    newState = 2;
-                    player.sendSystemMessage(Component.literal("§a§l[Panel] ¡Puzzle 2 RESUELTO! §f✔"));
-                } else {
-                    entityData.set(PUZZLE_2_SOLVED, false);
-                    newState = 1; // incorrecto
-                    player.sendSystemMessage(Component.literal("§c[Panel] Puzzle 2: Combinación incorrecta ✘"));
-                }
-            } else {
-                entityData.set(PUZZLE_2_SOLVED, false);
-                newState = 0;
-                if (isPuzzle2Solved()) {
-                    player.sendSystemMessage(Component.literal("§c[Panel] Puzzle 2: Desactivado - faltan fusibles"));
-                }
-            }
-        }
-
-        updateLinkedTurtles(puzzleId, newState);
-
-        // Mensaje final si ambos están resueltos
-        if (areBothPuzzlesSolved()) {
-            player.sendSystemMessage(Component.literal(
-                    "§6§l[Panel] ¡¡AMBOS PUZZLES RESUELTOS!! §e¡El panel está completamente activado! ⚡"
-            ));
-        }
+    private void playFuseSound(boolean inserting) {
+        this.level().playSound(null, this.blockPosition(),
+                inserting ? SoundEvents.LEVER_CLICK : SoundEvents.WOODEN_BUTTON_CLICK_OFF,
+                SoundSource.BLOCKS, 0.6F, inserting ? 1.2F : 0.8F);
     }
 
     public int getLinkedCount(int puzzleId) {
@@ -485,9 +430,7 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
             if (!player.isCreative()) {
                 stack.shrink(1);
             }
-            player.sendSystemMessage(Component.literal(
-                    "§6[Panel] §fFusible §e" + getColorName(heldFuse) + "§f colocado en slot §e" + (slotIndex + 1)
-            ));
+            playFuseSound(true);
             changed = true;
 
         } else if (currentFuse != FUSE_NONE && heldFuse == FUSE_NONE) {
@@ -501,9 +444,7 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
                     player.drop(returned, false);
                 }
             }
-            player.sendSystemMessage(Component.literal(
-                    "§6[Panel] §fFusible §e" + getColorName(currentFuse) + "§f retirado del slot §e" + (slotIndex + 1)
-            ));
+            playFuseSound(false);
             changed = true;
 
         } else if (currentFuse != FUSE_NONE && heldFuse != FUSE_NONE) {
@@ -520,20 +461,13 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
                     }
                 }
             }
-            player.sendSystemMessage(Component.literal(
-                    "§6[Panel] §fIntercambiado §e" + getColorName(currentFuse) + "§f por §e" + getColorName(heldFuse) + "§f en slot §e" + (slotIndex + 1)
-            ));
+            playFuseSound(true);
             changed = true;
-
-        } else {
-            player.sendSystemMessage(Component.literal(
-                    "§6[Panel] §7Slot " + (slotIndex + 1) + " vacío"
-            ));
         }
 
         // === VERIFICAR PUZZLE después de cualquier cambio ===
         if (changed) {
-            checkPuzzles(player, slotIndex);
+            reevaluatePuzzle(slotIndex < 3 ? 1 : 2);
             updateAllLinkedDoors();
         }
     }

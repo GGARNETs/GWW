@@ -27,6 +27,13 @@ public class Arena {
      */
     private final UUID noiseGroupId;
 
+    /**
+     * La zona no cambia una vez creada la arena, así que el AABB se calcula una sola
+     * vez. Antes se construía uno nuevo en cada contains(), y getArenaAt() lo llama
+     * para cada arena: con 50 salas y 100 jugadores eran miles de objetos por segundo.
+     */
+    private final AABB zoneAABB;
+
     public Arena(String id, String instanceName, BlockPos origin,
                  BlockPos zoneA, BlockPos zoneB,
                  BlockPos jailMin, BlockPos jailMax) {
@@ -44,16 +51,13 @@ public class Arena {
         this.jailMin = jailMin;
         this.jailMax = jailMax;
         this.noiseGroupId = UUID.nameUUIDFromBytes(("gww:arena:" + id).getBytes(StandardCharsets.UTF_8));
-    }
-
-    public AABB getZoneAABB() {
-        return new AABB(
-                zoneMin.getX(), zoneMin.getY(), zoneMin.getZ(),
-                zoneMax.getX() + 1.0, zoneMax.getY() + 1.0, zoneMax.getZ() + 1.0);
+        this.zoneAABB = new AABB(
+                this.zoneMin.getX(), this.zoneMin.getY(), this.zoneMin.getZ(),
+                this.zoneMax.getX() + 1.0, this.zoneMax.getY() + 1.0, this.zoneMax.getZ() + 1.0);
     }
 
     public boolean contains(Vec3 pos) {
-        return getZoneAABB().contains(pos);
+        return zoneAABB.contains(pos);
     }
 
     public boolean hasJail() {

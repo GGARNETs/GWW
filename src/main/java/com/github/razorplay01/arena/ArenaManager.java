@@ -6,6 +6,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.yaml.snakeyaml.Yaml;
 
@@ -264,6 +265,20 @@ public class ArenaManager {
             }
         }
         return null;
+    }
+
+    /**
+     * Área en la que una entidad debe buscar a sus compañeras de puzzle: la zona de su
+     * arena si está dentro de una, o el margen indicado si no (entidades sueltas en un
+     * mundo de pruebas, sin arena configurada).
+     * <p>
+     * Importa que sea la zona y no un radio fijo: con salas montadas cerca unas de
+     * otras, un radio grande alcanza salas vecinas y una partida acaba afectando a la
+     * de al lado, además de escanear muchos más chunks de los necesarios.
+     */
+    public static AABB searchAreaAround(Vec3 pos, AABB fallback) {
+        Arena arena = getArenaAt(pos);
+        return arena != null ? arena.getZoneAABB() : fallback;
     }
 
     // ==================== ESTADO DE PARTIDA ====================

@@ -57,6 +57,8 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     // de config/GWW/settings.yml (GwwSettings), comunes a todas las arenas.
     private static final int CHASE_MAX_DURATION = 200;
     private static final int NOISE_CHECK_INTERVAL = 12;
+    /** Cada cuántos ticks se reenvía la action bar si el texto no ha cambiado. */
+    private static final int ACTION_BAR_RESEND_INTERVAL = 10;
     private static final double CATCH_DISTANCE_SQ = 5.29;
     /** Puntos que pierde cada jugador al que el Ublabla devuelve a la jaula. */
     private static final int JAIL_POINTS_PENALTY = -50;
@@ -84,6 +86,8 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     private int chaseTimer = 0;
     private int chaseMessageCooldown = 0;
     private int checkWaitTimer = 0;
+    private int actionBarCooldown = 0;
+    private String lastActionBarMessage = null;
     private final List<Vec3> linkedDoors = new ArrayList<>();
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
     private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("animation.idle");
@@ -460,8 +464,9 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         if (jailMin == null || jailMax == null) return Optional.empty();
 
         AABB jailBox = new AABB(jailMin.getCenter(), jailMax.getCenter());
-        List<Player> players = level().getEntitiesOfClass(Player.class,
-                new AABB(spawnPos).inflate(patrolRadius * 2));
+        // Misma área que usa el resto de la clase. Antes era inflate(patrolRadius * 2),
+        // un cubo 5 veces más grande que alcanzaba salas vecinas sin motivo.
+        List<Player> players = level().getEntitiesOfClass(Player.class, buildPatrolArea());
 
         for (Player p : players) {
             if (!jailBox.contains(p.position())) {
@@ -502,6 +507,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         chaseTimer = 0;
         investigationTimer = 0;
         checkWaitTimer = 0;
+        lastActionBarMessage = null;
         broadcastMessage("Volviendo a mi puesto...");
     }
 
@@ -591,7 +597,20 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         );
     }
 
+    /**
+     * La cuenta atrás se pinta cada tick, pero el texto solo cambia una vez por
+     * segundo. Se reenvía cada medio segundo (la action bar tarda bastante más en
+     * desvanecerse, así que no parpadea) y al instante si el texto cambió, en vez de
+     * barrer la sala buscando jugadores 20 veces por segundo.
+     */
     private void showActionBarMessage(String message) {
+        boolean textChanged = !message.equals(lastActionBarMessage);
+        if (!textChanged && ++actionBarCooldown < ACTION_BAR_RESEND_INTERVAL) {
+            return;
+        }
+        actionBarCooldown = 0;
+        lastActionBarMessage = message;
+
         AABB area = buildPatrolArea();
         level().getEntitiesOfClass(Player.class, area).forEach(player ->
                 player.displayClientMessage(Component.literal(message), true));

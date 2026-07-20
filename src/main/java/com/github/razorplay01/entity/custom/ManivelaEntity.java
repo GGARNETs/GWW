@@ -23,6 +23,10 @@ public class ManivelaEntity extends BaseInteractiveEntity {
     private static final EntityDataAccessor<Integer> DATA_TYPE =
             SynchedEntityData.defineId(ManivelaEntity.class, EntityDataSerializers.INT);
 
+    /** Cada cuántos ticks la manivela mira si la han dejado sobre su válvula. */
+    private static final int VALVULA_CHECK_INTERVAL = 5;
+    private int valvulaCheckCounter = 0;
+
     public ManivelaEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
         this.noPhysics = false;
@@ -73,7 +77,11 @@ public class ManivelaEntity extends BaseInteractiveEntity {
     public void tick() {
         super.tick();
 
-        if (!this.level().isClientSide) {
+        // Encajar la manivela es un evento único por partida, así que no hace falta
+        // barrer válvulas en cada tick: cada cuarto de segundo es imperceptible al
+        // colocarla y ahorra una consulta de entidades por manivela y por tick.
+        if (!this.level().isClientSide && ++valvulaCheckCounter >= VALVULA_CHECK_INTERVAL) {
+            valvulaCheckCounter = 0;
             this.level().getEntitiesOfClass(ValvulaEntity.class, this.getBoundingBox().inflate(0.5D))
                     .forEach(valvula -> {
                         if (valvula.getValType() == this.getValType() && !valvula.hasManivela()) {

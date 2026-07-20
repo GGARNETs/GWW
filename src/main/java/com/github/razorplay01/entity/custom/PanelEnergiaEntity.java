@@ -103,11 +103,11 @@ public class PanelEnergiaEntity extends BaseEntity {
     }
 
     /**
-     * Alcance de la búsqueda de rejas al cortar el cable. Antes eran 5 bloques, y la
-     * reja del ducto está al otro lado de la sala: no la encontraba nunca y por eso
-     * cortar el cable no abría nada.
+     * Margen de búsqueda de rejas cuando el panel no está dentro de ninguna arena
+     * configurada. Antes eran 5 bloques y la reja del ducto, que está al otro lado de
+     * la sala, no se encontraba nunca; dentro de una arena manda la zona de la arena.
      */
-    private static final double REJA_SEARCH_RANGE = 100.0;
+    private static final double REJA_SEARCH_FALLBACK = 32.0;
 
     private void notifyLinkedRejas() {
         if (this.level().isClientSide) return;
@@ -115,7 +115,8 @@ public class PanelEnergiaEntity extends BaseEntity {
         // El enlace lo guarda la reja, no el panel, así que se barren las rejas de la
         // sala y se le pregunta a cada una si apunta a este panel.
         this.level().getEntitiesOfClass(RejaDuctoEntity.class,
-                        this.getBoundingBox().inflate(REJA_SEARCH_RANGE),
+                        ArenaManager.searchAreaAround(this.position(),
+                                this.getBoundingBox().inflate(REJA_SEARCH_FALLBACK)),
                         reja -> reja.isLinkedTo(this))
                 .forEach(RejaDuctoEntity::tryOpenAutomatically);
     }

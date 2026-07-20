@@ -261,9 +261,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
             return InteractionResult.PASS;
         }
         if (!isPowered()) {
-            if (!this.level().isClientSide) {
-                player.sendSystemMessage(Component.literal("§cEl panel está apagado."));
-            }
+            player.displayClientMessage(Component.literal("§cEl panel está apagado."), true);
             return InteractionResult.PASS;
         }
 
@@ -347,12 +345,10 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
 
         // Si ya resuelto, no hacer nada
         if (isSolved()) {
-            player.sendSystemMessage(Component.literal("§a✔ El puzzle ya está resuelto."));
             return;
         }
 
         if (isLocked()) {
-            player.sendSystemMessage(Component.literal("§c✖ Panel bloqueado. Espera..."));
             playSound(player, false);
             return;
         }
@@ -365,35 +361,31 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         List<String> input = getCurrentInput();
         int currentStep = input.size();
 
+        // Sin mensajes: el acierto y el fallo se distinguen por el sonido (campana que
+        // sube de tono vs. zumbido), así el jugador no sabe de antemano si va bien.
         if (correctSeq.get(currentStep).equals(partName)) {
             input.add(partName);
             setCurrentInput(input);
 
-            player.sendSystemMessage(Component.literal(
-                    "§a✔ " + formatName(partName) + " correcto! §7(" + input.size() + "/" + correctSeq.size() + ")"
-            ));
             playSound(player, true);
 
             if (input.size() == correctSeq.size()) {
-                onPuzzleSolved(player);
+                onPuzzleSolved();
             }
 
         } else {
-            onPuzzleFailed(player, partName);
+            onPuzzleFailed(player);
         }
     }
 
-    private void onPuzzleSolved(Player player) {
+    private void onPuzzleSolved() {
         setSolved(true);
         setCurrentInput(new ArrayList<>());
         updateAllLinkedDoors();
         // El estado visual se actualiza automáticamente ya que isSolved() cambió.
     }
 
-    private void onPuzzleFailed(Player player, String wrongPart) {
-        player.sendSystemMessage(Component.literal(
-                "§c✖ ¡Incorrecto! " + formatName(wrongPart) + " no es el siguiente. Reiniciando..."
-        ));
+    private void onPuzzleFailed(Player player) {
         playSound(player, false);
 
         setLocked(true);
@@ -403,21 +395,9 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
 
     private void handleStatusButton(Player player) {
         if (isSolved()) {
-            player.sendSystemMessage(Component.literal("§a★ Puzzle completado ★"));
             toggleLinkedDoors();
-            player.sendSystemMessage(Component.literal("§e↔ Puertas toggled"));
         } else if (isLocked()) {
-            player.sendSystemMessage(Component.literal("§c⏳ Panel bloqueado..."));
-        } else {
-            List<String> input = getCurrentInput();
-            if (input.isEmpty()) {
-                player.sendSystemMessage(Component.literal("§e▶ Puzzle sin iniciar. Presiona los símbolos en el orden correcto."));
-            } else {
-                List<String> correctSeq = getCorrectSequence();
-                player.sendSystemMessage(Component.literal(
-                        "§e▶ Progreso: " + input.size() + "/" + correctSeq.size()
-                ));
-            }
+            playSound(player, false);
         }
     }
 
@@ -429,10 +409,6 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
             this.level().playSound(null, this.blockPosition(),
                     SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.BLOCKS, 1.0F, 0.5F);
         }
-    }
-
-    private String formatName(String partName) {
-        return partName.substring(0, 1).toUpperCase() + partName.substring(1);
     }
 
     public void resetPuzzle() {
