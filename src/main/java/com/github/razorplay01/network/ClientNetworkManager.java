@@ -31,21 +31,19 @@ public class ClientNetworkManager {
     }
 
     private static void checkMinigameStatePacket(ClientPlayNetworking.Context context, MinigameStatePacket pkt) {
-        context.client().execute(() ->
-                ClientMinigameState.get().update(
-                        pkt.isActive(),
-                        new Vec3(pkt.getX(), pkt.getY(), pkt.getZ()),
-                        pkt.getRadius()
-                ));
+        ClientMinigameState.get().update(
+                pkt.isActive(),
+                new Vec3(pkt.getX(), pkt.getY(), pkt.getZ()),
+                pkt.getRadius()
+        );
     }
 
     private static void handleNoisePacket(ClientPlayNetworking.Context context, NoisePacket pkt) {
-        context.client().execute(() ->
-                ClientNoiseState.get().update(
-                        pkt.getNoiseLevel(),
-                        pkt.getDecayRate(),
-                        pkt.isEnabled()
-                ));
+        ClientNoiseState.get().update(
+                pkt.getNoiseLevel(),
+                pkt.getDecayRate(),
+                pkt.isEnabled()
+        );
     }
 
 	/*private static void checkToastPacket(ClientPlayNetworking.Context context, ToastPacket pkt) {

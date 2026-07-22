@@ -57,10 +57,4 @@ public class CannonBulletEntity extends PathfinderMob implements GeoEntity, Geck
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return this.geoCache;
     }
-
-    @Override
-    public void tick() {
-        super.tick();
-        this.hasImpulse = true;
-    }
 }

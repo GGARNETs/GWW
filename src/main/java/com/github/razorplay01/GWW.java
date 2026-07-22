@@ -14,8 +14,10 @@ import com.github.razorplay01.entity.client.*;
 import com.github.razorplay01.entity.custom.*;
 import com.github.razorplay01.entity.custom.util.PuzzleEntityChecker;
 import com.github.razorplay01.event.NoiseEventHandler;
+import com.github.razorplay01.client.render.MinigameBorderRenderer;
+import com.github.razorplay01.extra.CannonArenaManager;
 import com.github.razorplay01.extra.MinigameCommand;
-import com.github.razorplay01.extra.MinigameState;
+import com.github.razorplay01.extra.MinigameManager;
 import com.github.razorplay01.instance.InstanceManager;
 import com.github.razorplay01.item.ModComponents;
 import com.github.razorplay01.item.ModItems;
@@ -42,7 +44,6 @@ public class GWW implements ModInitializer, ClientModInitializer {
     public static final String PACKET_BASE_CHANNEL = MOD_ID + ":packets_channel";
     public static final int ALLOWED_SLOT = 4;
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-    public static MinigameState currentGame = null;
     public static MinecraftServer server;
 
     @Override
@@ -52,15 +53,11 @@ public class GWW implements ModInitializer, ClientModInitializer {
         GwwSettings.load();
         InstanceManager.loadAll();
         ArenaManager.load();
+        CannonArenaManager.load();
         ServerTickEvents.START_SERVER_TICK.register(server -> {
             ArenaManager.tickGroups(server);
             EscapeRoomController.tick(server);
-            if (currentGame != null && currentGame.isActive()) {
-                boolean sigue = currentGame.tick(server);
-                if (!sigue) {
-                    currentGame = null;
-                }
-            }
+            MinigameManager.tick();
         });
         NoiseEventHandler.register();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -114,6 +111,9 @@ public class GWW implements ModInitializer, ClientModInitializer {
             }
         });*/
         ServerLifecycleEvents.SERVER_STARTING.register(minecraftServer -> server = minecraftServer);
+        // Al apagar, cerrar las partidas: si no, los cañones y balas quedan guardados
+        // en el mundo y reaparecen al arrancar de nuevo, ya sin nadie que los mueva.
+        ServerLifecycleEvents.SERVER_STOPPING.register(minecraftServer -> MinigameManager.stopAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(minecraftServer -> server = null);
         LOGGER.info("Hello Fabric world!");
     }
@@ -148,6 +148,7 @@ public class GWW implements ModInitializer, ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.PANEL_ENERGIA, PanelEnergiaEntityRenderer::new);
         EntityRendererRegistry.register(ModEntities.PANEL_CODIGO, PanelCodigoEntityRenderer::new);
         NoiseHudRenderer.register();
+        MinigameBorderRenderer.register();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player != null) {
                 ClientNoiseState.get().tick();
