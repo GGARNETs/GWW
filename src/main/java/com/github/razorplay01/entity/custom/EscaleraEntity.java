@@ -12,7 +12,6 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -80,26 +79,16 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
         }
     }
 
-    private void handleGravityAndMovement() {
-        this.setNoGravity(false);
-
-        Vec3 motion = this.getDeltaMovement();
-
-        if (!this.onGround()) {
-            motion = motion.add(0, -0.08, 0);
-            motion = motion.multiply(0.98, 0.98, 0.98);
-        } else {
-            motion = new Vec3(0, motion.y, 0);
-        }
-
-        this.setDeltaMovement(motion);
-        this.move(MoverType.SELF, this.getDeltaMovement());
-    }
-
+    private static final int NEARBY_REFRESH_INTERVAL = 5;
+    private List<Player> cachedNearbyPlayers = List.of();
+    private int nearbyRefreshCooldown = 0;
 
     /**
      * Simula colisión sólida con los escalones.
      * El jugador NO sube automáticamente - debe saltar.
+     * La consulta de jugadores era lo caro con una escalera por sala barriendo cada
+     * tick: la lista se refresca cada 5 ticks (con margen extra de radio) y la
+     * colisión en sí se sigue simulando por tick con las posiciones al día.
      */
     private void handleSolidStepCollisions() {
         List<MultiPart<EscaleraEntity>> parts = this.hitboxData.getCustomParts();
@@ -108,10 +97,14 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
             return;
         }
 
-        AABB searchArea = this.getBoundingBox().inflate(5.0);
-        List<Player> players = this.level().getEntitiesOfClass(Player.class, searchArea);
+        if (--nearbyRefreshCooldown <= 0) {
+            nearbyRefreshCooldown = NEARBY_REFRESH_INTERVAL;
+            cachedNearbyPlayers = this.level().getEntitiesOfClass(Player.class,
+                    this.getBoundingBox().inflate(6.0));
+        }
 
-        for (Player player : players) {
+        for (Player player : cachedNearbyPlayers) {
+            if (player.isRemoved()) continue;
             handlePlayerSolidCollision(player, parts);
         }
     }

@@ -49,6 +49,10 @@ public class ValvulaEntity extends BaseEntity {
 
     private static final int PARTICLE_INTERVAL = 2;
     private static final int DIRECTION_EXPIRE_TICKS = 10;
+    private static final int NEARBY_REFRESH_INTERVAL = 5;
+
+    private List<Player> cachedNearbyPlayers = List.of();
+    private int nearbyRefreshCooldown = 0;
 
     /**
      * Margen para avisar a las rejas cuando la válvula no está dentro de ninguna arena
@@ -284,6 +288,17 @@ public class ValvulaEntity extends BaseEntity {
             return;
         }
 
+        // Una válvula sin resolver echa vapor para siempre; con nadie cerca no hay
+        // que emitir partículas ni empujar. La lista de jugadores se refresca cada
+        // 5 ticks: la consulta de entidades por tick era lo caro, no el empuje.
+        if (--nearbyRefreshCooldown <= 0) {
+            nearbyRefreshCooldown = NEARBY_REFRESH_INTERVAL;
+            refreshNearbyPlayers();
+        }
+        if (cachedNearbyPlayers.isEmpty()) {
+            return;
+        }
+
         particleTickCounter++;
         if (particleTickCounter >= PARTICLE_INTERVAL) {
             particleTickCounter = 0;
@@ -292,6 +307,16 @@ public class ValvulaEntity extends BaseEntity {
 
         pushNearbyPlayers();
         cleanupExpiredEntries();
+    }
+
+    private void refreshNearbyPlayers() {
+        double maxRadius = getMaxEmitterRadius();
+        if (maxRadius <= 0 || !(this.level() instanceof ServerLevel serverLevel)) {
+            cachedNearbyPlayers = List.of();
+            return;
+        }
+        cachedNearbyPlayers = serverLevel.getEntitiesOfClass(Player.class,
+                this.getBoundingBox().inflate(maxRadius + 12));
     }
 
     private void spawnAllParticles() {
@@ -317,16 +342,8 @@ public class ValvulaEntity extends BaseEntity {
     }
 
     private void pushNearbyPlayers() {
-        if (!(this.level() instanceof ServerLevel serverLevel)) return;
-        double maxRadius = getMaxEmitterRadius();
-        if (maxRadius <= 0) return;
-
-        List<Player> nearbyPlayers = serverLevel.getEntitiesOfClass(Player.class,
-                this.getBoundingBox().inflate(maxRadius + 10));
-        if (nearbyPlayers.isEmpty()) return;
-
-        for (Player player : nearbyPlayers) {
-            if (player.isSpectator() || player.isCreative()) continue;
+        for (Player player : cachedNearbyPlayers) {
+            if (player.isSpectator() || player.isCreative() || player.isRemoved()) continue;
             boolean isInAnyZone = false;
 
             for (ParticleEmitter emitter : particleEmitters) {

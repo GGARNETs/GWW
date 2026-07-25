@@ -272,9 +272,9 @@ public abstract class BaseCuadroEntity extends BaseInteractiveEntity implements 
             ));
 
             if (isPuzzleSolved()) {
-                player.sendSystemMessage(Component.literal("§a✓ Puzzle resuelto"));
+                player.sendSystemMessage(Component.literal("§a✓ Cuadro en su lugar"));
             } else if (hasBeenMoved()) {
-                player.sendSystemMessage(Component.literal("§cPuzzle sin resolver"));
+                player.sendSystemMessage(Component.literal("§cCuadro desordenado"));
             } else {
                 player.sendSystemMessage(Component.literal("§7Mueve el cuadro para activar el puzzle"));
             }

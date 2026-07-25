@@ -470,7 +470,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
 
         for (Player p : players) {
             if (!jailBox.contains(p.position())) {
-                return Optional.of("§c¡Has salido de la zona segura! Eso no está permitido.");
+                return Optional.of("§c¡Has salido de la jaula! Eso no está permitido.");
             }
         }
         return Optional.empty();

@@ -238,6 +238,9 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
                 setLocked(false);
                 setCurrentInput(new ArrayList<>());
                 lockTimer = 0;
+                this.level().getEntitiesOfClass(Player.class, this.getBoundingBox().inflate(8.0))
+                        .forEach(p -> p.displayClientMessage(
+                                Component.literal("§7El panel vuelve a estar operativo."), true));
             }
         }
     }
@@ -350,6 +353,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
 
         if (isLocked()) {
             playSound(player, false);
+            player.displayClientMessage(Component.literal("§7El panel está bloqueado, espera un momento."), true);
             return;
         }
 
@@ -361,8 +365,11 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         List<String> input = getCurrentInput();
         int currentStep = input.size();
 
-        // Sin mensajes: el acierto y el fallo se distinguen por el sonido (campana que
-        // sube de tono vs. zumbido), así el jugador no sabe de antemano si va bien.
+        // Feedback neutral: el mismo mensaje registre lo que registre, sin contador ni
+        // pista de acierto/fallo. Lo único que distingue el resultado es el sonido
+        // (campana que sube de tono vs. zumbido).
+        player.displayClientMessage(Component.literal("§7Pulsación registrada."), true);
+
         if (correctSeq.get(currentStep).equals(partName)) {
             input.add(partName);
             setCurrentInput(input);
@@ -391,6 +398,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         setLocked(true);
         lockTimer = LOCK_DURATION_TICKS;
         setCurrentInput(new ArrayList<>());
+        player.displayClientMessage(Component.literal("§7El panel se ha reiniciado y quedará bloqueado un momento."), true);
     }
 
     private void handleStatusButton(Player player) {
@@ -398,6 +406,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
             toggleLinkedDoors();
         } else if (isLocked()) {
             playSound(player, false);
+            player.displayClientMessage(Component.literal("§7El panel está bloqueado, espera un momento."), true);
         }
     }
 

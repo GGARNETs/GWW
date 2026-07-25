@@ -140,21 +140,6 @@ public class PalancaEntity extends BaseInteractiveEntity implements EscapeRoomPe
         }
     }
 
-    private void handleGravityAndMovement() {
-        this.setNoGravity(false);
-        Vec3 motion = this.getDeltaMovement();
-
-        if (!this.onGround()) {
-            motion = motion.add(0, -0.08, 0);
-            motion = motion.multiply(0.98, 0.98, 0.98);
-        } else {
-            motion = new Vec3(0, motion.y, 0);
-        }
-
-        this.setDeltaMovement(motion);
-        this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
-    }
-
     protected void onPuzzleSolved() {
     }
 
@@ -196,7 +181,7 @@ public class PalancaEntity extends BaseInteractiveEntity implements EscapeRoomPe
             if (isPuzzleSolved()) {
                 player.sendSystemMessage(Component.literal("§a✓ Palanca correctamente colocada"));
             } else if (hasBeenMoved()) {
-                player.sendSystemMessage(Component.literal("§cPalanca sin resolver"));
+                player.sendSystemMessage(Component.literal("§cPalanca fuera de su lugar"));
             } else {
                 player.sendSystemMessage(Component.literal("§7Mueve la palanca para activar el puzzle"));
             }

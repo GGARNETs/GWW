@@ -37,6 +37,7 @@ public class BaseInteractiveEntity extends BaseEntity {
     private Player cachedBoundPlayer;
 
     private static final float DISTANCE_FROM_PLAYER = 1.9F;
+    private static final double MAX_MOVE_PER_TICK = 1.5;
 
     public BaseInteractiveEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -59,8 +60,8 @@ public class BaseInteractiveEntity extends BaseEntity {
             if (isBound()) {
                 Player player = getBoundPlayer();
                 if (player != null && player.isAlive()) {
-                    updatePositionNearPlayer(player);
-                    if (this.horizontalCollision || this.verticalCollision) {
+                    boolean moved = updatePositionNearPlayer(player);
+                    if (moved && (this.horizontalCollision || this.verticalCollision)) {
                         this.setDeltaMovement(0, 0.1, 0);
                         this.move(MoverType.SELF, this.getDeltaMovement());
                     }
@@ -96,7 +97,7 @@ public class BaseInteractiveEntity extends BaseEntity {
         }
     }
 
-    private void updatePositionNearPlayer(Player player) {
+    private boolean updatePositionNearPlayer(Player player) {
         Vec3 look = player.getLookAngle().normalize();
 
         // Posición objetivo ideal
@@ -110,6 +111,19 @@ public class BaseInteractiveEntity extends BaseEntity {
         // Vector de movimiento hacia la posición objetivo
         Vec3 movement = targetPos.subtract(currentPos);
 
+        // Con el jugador quieto la entidad ya está en su sitio: sin mover no hay
+        // colisiones que calcular ni paquetes de posición que mandar
+        if (movement.lengthSqr() < 1.0E-4) {
+            updateRotationTowardsPlayer(player);
+            return false;
+        }
+
+        // Acotado por tick: un objetivo lejano (jugador teletransportado o entidad
+        // atascada en una pared) barría colisiones sobre todo el trayecto de golpe
+        if (movement.lengthSqr() > MAX_MOVE_PER_TICK * MAX_MOVE_PER_TICK) {
+            movement = movement.normalize().scale(MAX_MOVE_PER_TICK);
+        }
+
         // === MOVIMIENTO CON COLISIONES ===
         this.move(MoverType.SELF, movement);
 
@@ -122,6 +136,39 @@ public class BaseInteractiveEntity extends BaseEntity {
 
         // Actualizamos rotación para que mire al jugador
         updateRotationTowardsPlayer(player);
+        return true;
+    }
+
+    /**
+     * Gravedad manual para las entidades que caen al soltarse (palanca, manivela,
+     * escalera). NO_GRAVITY es un dato sincronizado y debe quedarse en true: alternarlo
+     * cada tick manda un paquete de metadatos por entidad y por tick a cada jugador
+     * cercano. En reposo sobre el suelo solo sondea el move cada 10 ticks para detectar
+     * si le quitan el bloque de debajo.
+     */
+    protected void handleGravityAndMovement() {
+        Vec3 motion = this.getDeltaMovement();
+
+        if (!this.onGround()) {
+            motion = motion.add(0, -0.08, 0);
+            motion = motion.multiply(0.98, 0.98, 0.98);
+        } else {
+            motion = new Vec3(0, motion.y, 0);
+        }
+
+        this.setDeltaMovement(motion);
+
+        if (this.onGround() && motion.lengthSqr() < 1.0E-6) {
+            // En reposo no se llama a move(): incluso como sondeo marcó 1,5 ms/tick en
+            // el spark. Para detectar que le quitaron el suelo alcanza mirar el bloque
+            // de abajo cada segundo; si falta, se reactiva la física de verdad.
+            if (this.tickCount % 20 == 0
+                    && this.level().getBlockState(this.blockPosition().below()).isAir()) {
+                this.setOnGround(false);
+            }
+            return;
+        }
+        this.move(MoverType.SELF, this.getDeltaMovement());
     }
 
     private void updateRotationTowardsPlayer(Player player) {
