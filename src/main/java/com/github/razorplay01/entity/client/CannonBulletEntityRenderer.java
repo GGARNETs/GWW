@@ -8,5 +8,7 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
 public class CannonBulletEntityRenderer extends GeoEntityRenderer<CannonBulletEntity> {
     public CannonBulletEntityRenderer(EntityRendererProvider.Context context) {
         super(context, new CannonBulletEntityModel());
+        // El doble de grande, igual que su hitbox (sized de la entidad y json de morehitboxes).
+        withScale(2.0f);
     }
 }

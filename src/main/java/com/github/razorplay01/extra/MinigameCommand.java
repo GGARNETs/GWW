@@ -2,6 +2,7 @@ package com.github.razorplay01.extra;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -30,6 +31,9 @@ public class MinigameCommand {
 
     private static final String ALL = "all";
 
+    /** Daño por balazo si no se indica en el comando: 2 corazones. */
+    private static final float DEFAULT_BULLET_DAMAGE = 4.0f;
+
     private static final SuggestionProvider<CommandSourceStack> ARENA_IDS =
             (ctx, builder) -> SharedSuggestionProvider.suggest(CannonArenaManager.getIds(), builder);
 
@@ -41,13 +45,6 @@ public class MinigameCommand {
                 return SharedSuggestionProvider.suggest(options, builder);
             };
 
-    private static final SuggestionProvider<CommandSourceStack> RUNNING_IDS_OR_ALL =
-            (ctx, builder) -> {
-                List<String> options = new ArrayList<>();
-                options.add(ALL);
-                options.addAll(MinigameManager.getRunningIds());
-                return SharedSuggestionProvider.suggest(options, builder);
-            };
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("cc")
@@ -84,7 +81,10 @@ public class MinigameCommand {
                                 .then(Commands.argument("tiempo_segundos", IntegerArgumentType.integer(1, 3600))
                                         .then(Commands.argument("dificultad", IntegerArgumentType.integer(1, 1000))
                                                 .then(Commands.argument("bulletSpeed", DoubleArgumentType.doubleArg(0.05, 5.0))
-                                                        .executes(MinigameCommand::start)
+                                                        .executes(ctx -> start(ctx, DEFAULT_BULLET_DAMAGE))
+                                                        .then(Commands.argument("danio", FloatArgumentType.floatArg(0.0f, 100.0f))
+                                                                .executes(ctx -> start(ctx, FloatArgumentType.getFloat(ctx, "danio")))
+                                                        )
                                                 )
                                         )
                                 )
@@ -93,7 +93,7 @@ public class MinigameCommand {
 
                 .then(Commands.literal("stop")
                         .then(Commands.argument("arena", StringArgumentType.word())
-                                .suggests(RUNNING_IDS_OR_ALL)
+                                .suggests(ARENA_IDS_OR_ALL)
                                 .executes(MinigameCommand::stop)
                         )
                 )
@@ -186,7 +186,7 @@ public class MinigameCommand {
 
     // ==================== PARTIDAS ====================
 
-    private static int start(CommandContext<CommandSourceStack> context) {
+    private static int start(CommandContext<CommandSourceStack> context, float bulletDamage) {
         CommandSourceStack source = context.getSource();
         String target = StringArgumentType.getString(context, "arena");
         int seconds = IntegerArgumentType.getInteger(context, "tiempo_segundos");
@@ -197,36 +197,47 @@ public class MinigameCommand {
         if (targets.isEmpty()) return 0;
 
         for (CannonArena arena : targets) {
-            MinigameManager.start(source.getLevel(), arena, seconds, shots, bulletSpeed);
+            MinigameManager.start(source.getLevel(), arena, seconds, shots, bulletSpeed, bulletDamage);
         }
 
         int count = targets.size();
         source.sendSuccess(() -> Component.literal(String.format(
-                "✅ %d partida(s) iniciada(s): %d segundos, %d disparos, velocidad %.2f",
-                count, seconds, shots, bulletSpeed)), true);
+                "✅ %d partida(s) iniciada(s): %d segundos, %d disparos, velocidad %.2f, daño %.1f",
+                count, seconds, shots, bulletSpeed, bulletDamage)), true);
         return count;
     }
 
+    /**
+     * Para la(s) partida(s) y además barre cañones y balas huérfanos de la zona,
+     * haya partida o no: tras un cierre en seco no queda ninguna activa pero los
+     * restos siguen ahí, y antes este comando no los tocaba.
+     */
     private static int stop(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         String target = StringArgumentType.getString(context, "arena");
 
-        if (ALL.equalsIgnoreCase(target)) {
-            int stopped = MinigameManager.stopAll();
-            if (stopped == 0) {
-                source.sendFailure(Component.literal("❌ No hay ninguna partida en marcha"));
-                return 0;
-            }
-            source.sendSuccess(() -> Component.literal("🛑 " + stopped + " partida(s) detenida(s)"), true);
-            return stopped;
+        List<CannonArena> targets = resolve(source, target);
+        if (targets.isEmpty()) return 0;
+
+        int stopped = 0;
+        int orphans = 0;
+        for (CannonArena arena : targets) {
+            if (MinigameManager.stop(arena.getId())) stopped++;
+            orphans += MinigameManager.clearOrphans(source.getLevel(), arena);
         }
 
-        if (!MinigameManager.stop(target)) {
-            source.sendFailure(Component.literal("❌ La arena '" + target + "' no tiene ninguna partida en marcha"));
+        if (stopped == 0 && orphans == 0) {
+            source.sendSuccess(() -> Component.literal(
+                    "No había partidas en marcha ni restos que limpiar."), false);
             return 0;
         }
-        source.sendSuccess(() -> Component.literal("🛑 Partida de '" + target + "' detenida"), true);
-        return 1;
+
+        int stoppedFinal = stopped;
+        int orphansFinal = orphans;
+        source.sendSuccess(() -> Component.literal(String.format(
+                "🛑 %d partida(s) detenida(s), %d cañón(es)/bala(s) huérfanos limpiados",
+                stoppedFinal, orphansFinal)), true);
+        return stopped + orphans;
     }
 
     /**

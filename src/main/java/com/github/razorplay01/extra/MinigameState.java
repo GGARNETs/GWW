@@ -4,6 +4,7 @@ import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.razorplay01.entity.ModEntities;
 import com.github.razorplay01.entity.custom.CannonBulletEntity;
 import com.github.razorplay01.entity.custom.CannonEntity;
+import com.github.razorplay01.integration.GeoWarePointsIntegration;
 import com.github.razorplay01.network.ServerNetworkManager;
 import com.github.razorplay01.network.packet.MinigameStatePacket;
 import lombok.Getter;
@@ -12,21 +13,24 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 /**
  * Una partida en marcha del minijuego de cañones. Los cañones aparecen fuera del
  * círculo, esperan un segundo y disparan una bala que lo cruza en línea recta; a
- * quien alcanza lo empuja. No se elimina a nadie: la zona está cerrada y el juego
- * acaba solo cuando se agota el tiempo.
+ * quien alcanza le hace daño y lo lanza por los aires. La zona está cerrada y el
+ * juego acaba solo cuando se agota el tiempo.
  * <p>
  * Todo lo que hace por tick está acotado a la gente de la arena, nunca a los
  * jugadores del mundo: con 100 jugadores conectados y varias arenas a la vez,
@@ -37,7 +41,14 @@ public class MinigameState {
     public static final double SPAWN_MARGIN = 4.0;
 
     private static final int SHOOT_DELAY = 20;
-    private static final double PUSH_MULTIPLIER = 1.5;
+    /**
+     * Empuje al ser alcanzado: fijo, no depende de la velocidad de la bala (antes
+     * se escalaba con ella y con balas lentas el golpe no se notaba). El toque
+     * hacia arriba despega al jugador del suelo para que el empujón no lo frene
+     * la fricción.
+     */
+    private static final double PUSH_STRENGTH = 1.5;
+    private static final double PUSH_UPWARD = 0.5;
     /** Distancia pasado el borde a la que la bala se borra. */
     private static final double BULLET_OVERSHOOT = 3.0;
 
@@ -55,6 +66,11 @@ public class MinigameState {
     /** Filtro rápido bala-jugador antes de comparar hitboxes. */
     private static final double HIT_PRECHECK_RANGE_SQ = 9.0;
 
+    /** Puntos que pierde quien muere en la partida. */
+    private static final int DEATH_POINT_PENALTY = 10;
+    /** Puntos que gana quien sigue vivo cuando termina la partida. */
+    private static final int SURVIVOR_POINT_REWARD = 20;
+
     @Getter
     private final ServerLevel world;
     @Getter
@@ -63,6 +79,7 @@ public class MinigameState {
     private final double radius;
     private final int totalShots;
     private final double bulletSpeed;
+    private final float bulletDamage;
     private final int bulletMaxTicks;
 
     private int remainingTicks;
@@ -78,18 +95,27 @@ public class MinigameState {
     private List<ServerPlayer> playersInside = new ArrayList<>();
     private final Set<UUID> trackedInside = new HashSet<>();
 
+    /**
+     * Muertos de esta partida, con el modo de juego que tenían: quedan de
+     * espectador viendo a los demás y al terminar se les devuelve su modo.
+     */
+    private final Map<UUID, GameType> eliminated = new HashMap<>();
+
+    /**
+     * Referencias directas a las entidades, no UUIDs: buscar por UUID en el mapa
+     * del mundo cada tick y por cada bala suma con cientos de balas volando a la vez.
+     */
     private final List<PendingShot> pendingShots = new ArrayList<>();
     private final List<MovingBullet> movingBullets = new ArrayList<>();
-    private final List<UUID> activeCannons = new ArrayList<>();
 
     private static class PendingShot {
-        final UUID cannonId;
+        final CannonEntity cannon;
         final Vec3 startPos;
         final Vec3 direction;
         int cooldown;
 
-        PendingShot(UUID cannonId, Vec3 startPos, Vec3 direction, int cooldown) {
-            this.cannonId = cannonId;
+        PendingShot(CannonEntity cannon, Vec3 startPos, Vec3 direction, int cooldown) {
+            this.cannon = cannon;
             this.startPos = startPos;
             this.direction = direction;
             this.cooldown = cooldown;
@@ -97,24 +123,25 @@ public class MinigameState {
     }
 
     private static class MovingBullet {
-        final UUID bulletId;
-        final UUID cannonId;
+        final CannonBulletEntity entity;
+        final CannonEntity cannon;
         final Vec3 direction;
-        /** Una bala empuja a cada jugador una sola vez, no en cada tick que lo atraviesa. */
+        /** Una bala golpea a cada jugador una sola vez, no en cada tick que lo atraviesa. */
         final Set<UUID> alreadyHit = new HashSet<>();
         boolean hasEnteredCircle;
         int ticksAlive;
 
-        MovingBullet(UUID bulletId, UUID cannonId, Vec3 direction) {
-            this.bulletId = bulletId;
-            this.cannonId = cannonId;
+        MovingBullet(CannonBulletEntity entity, CannonEntity cannon, Vec3 direction) {
+            this.entity = entity;
+            this.cannon = cannon;
             this.direction = direction;
             this.hasEnteredCircle = false;
             this.ticksAlive = 0;
         }
     }
 
-    public MinigameState(ServerLevel world, CannonArena arena, int durationSeconds, int totalShots, double bulletSpeed) {
+    public MinigameState(ServerLevel world, CannonArena arena, int durationSeconds, int totalShots,
+                         double bulletSpeed, float bulletDamage) {
         this.world = world;
         this.arena = arena;
         this.center = arena.getCenter();
@@ -122,6 +149,7 @@ public class MinigameState {
         this.remainingTicks = durationSeconds * 20;
         this.totalShots = totalShots;
         this.bulletSpeed = bulletSpeed;
+        this.bulletDamage = bulletDamage;
         // Desfase por arena: con varias partidas a la vez, que no sincronicen todas
         // su envío de estado en el mismo tick.
         this.syncCounter = Math.floorMod(arena.getId().hashCode(), SYNC_INTERVAL);
@@ -147,13 +175,7 @@ public class MinigameState {
      * terminada (un crash, un /reload). Si no se limpian, se quedan para siempre.
      */
     private void clearLeftovers() {
-        AABB bounds = arena.getSearchBounds();
-        for (Entity entity : world.getEntitiesOfClass(CannonEntity.class, bounds)) {
-            entity.discard();
-        }
-        for (Entity entity : world.getEntitiesOfClass(CannonBulletEntity.class, bounds)) {
-            entity.discard();
-        }
+        MinigameManager.clearOrphans(world, arena);
     }
 
     public boolean tick() {
@@ -223,6 +245,31 @@ public class MinigameState {
     }
 
     /**
+     * Muerte de alguien que estaba jugando: en vez de morir de verdad (pantalla
+     * de muerte, drops, respawn lejos) se le repone la vida y queda de espectador
+     * viendo cómo siguen los demás, con su penalización de puntos. Devuelve false
+     * si esta partida no lo tenía dentro.
+     * <p>
+     * No toca las listas de jugadores: esto salta en pleno recorrido de
+     * playersInside (dentro del hurt de checkCollision) y modificarlas aquí
+     * reventaría la iteración. El refresco periódico lo saca solo.
+     */
+    public boolean eliminate(ServerPlayer player) {
+        if (!trackedInside.contains(player.getUUID()) || eliminated.containsKey(player.getUUID())) {
+            return false;
+        }
+
+        eliminated.put(player.getUUID(), player.gameMode.getGameModeForPlayer());
+        player.setHealth(player.getMaxHealth());
+        player.setGameMode(GameType.SPECTATOR);
+        GeoWarePointsIntegration.award(player, -DEATH_POINT_PENALTY);
+        ServerNetworkManager.sendMinigameStatePacketToPlayer(player, MinigameStatePacket.inactive());
+        player.sendSystemMessage(Component.literal(
+                "§c💀 ¡Te alcanzaron! Quedas de espectador (-" + DEATH_POINT_PENALTY + " puntos)."), false);
+        return true;
+    }
+
+    /**
      * El muro: cerca del borde empuja hacia el centro, y a quien lo cruza igualmente
      * (por un balazo fuerte) lo recoloca justo dentro anulándole la velocidad de salida.
      */
@@ -231,7 +278,9 @@ public class MinigameState {
         double softRadiusSq = softRadius * softRadius;
 
         for (ServerPlayer player : playersInside) {
-            if (player.isRemoved()) continue;
+            // El chequeo de espectador cubre a los recién eliminados, que siguen
+            // en la lista hasta el próximo refresco: al muro ya no le importan.
+            if (player.isRemoved() || player.isSpectator()) continue;
 
             double dx = player.getX() - center.x;
             double dz = player.getZ() - center.z;
@@ -300,15 +349,13 @@ public class MinigameState {
         cannon.setSilent(true);
         world.addFreshEntity(cannon);
 
-        activeCannons.add(cannon.getUUID());
-
         Vec3 shootDirection = new Vec3(
                 -Math.sin(Math.toRadians(finalYaw)),
                 0,
                 Math.cos(Math.toRadians(finalYaw))
         ).normalize();
 
-        pendingShots.add(new PendingShot(cannon.getUUID(), cannonPos, shootDirection, SHOOT_DELAY));
+        pendingShots.add(new PendingShot(cannon, cannonPos, shootDirection, SHOOT_DELAY));
     }
 
     private void updatePendingShots() {
@@ -334,13 +381,15 @@ public class MinigameState {
         bullet.setPersistenceRequired();
         bullet.setSilent(true);
         bullet.noPhysics = true;
+        // Contorno brillante: las balas son pequeñas y rápidas y sin esto casi no se ven.
+        bullet.setGlowingTag(true);
         world.addFreshEntity(bullet);
 
-        if (world.getEntity(shot.cannonId) instanceof CannonEntity cannon) {
-            cannon.triggerShootAnim(world);
+        if (!shot.cannon.isRemoved()) {
+            shot.cannon.triggerShootAnim(world);
         }
 
-        movingBullets.add(new MovingBullet(bullet.getUUID(), shot.cannonId, shot.direction));
+        movingBullets.add(new MovingBullet(bullet, shot.cannon, shot.direction));
     }
 
     /**
@@ -351,10 +400,9 @@ public class MinigameState {
         Iterator<MovingBullet> it = movingBullets.iterator();
         while (it.hasNext()) {
             MovingBullet bullet = it.next();
-            Entity entity = world.getEntity(bullet.bulletId);
-            if (entity == null) {
-                removeEntity(bullet.cannonId);
-                activeCannons.remove(bullet.cannonId);
+            CannonBulletEntity entity = bullet.entity;
+            if (entity.isRemoved()) {
+                bullet.cannon.discard();
                 it.remove();
                 continue;
             }
@@ -374,8 +422,7 @@ public class MinigameState {
             boolean salio = bullet.hasEnteredCircle && distSqToCenter > exitRadius * exitRadius;
             if (salio || ++bullet.ticksAlive > bulletMaxTicks) {
                 entity.discard();
-                removeEntity(bullet.cannonId);
-                activeCannons.remove(bullet.cannonId);
+                bullet.cannon.discard();
                 it.remove();
             }
         }
@@ -384,17 +431,28 @@ public class MinigameState {
     private void checkCollision(MovingBullet bullet, Entity entity) {
         if (playersInside.isEmpty()) return;
 
-        AABB bulletBox = hitboxOf(entity);
         Vec3 bulletPos = entity.position();
+        // La hitbox solo se calcula si algún jugador pasa el filtro de distancia:
+        // la mayoría de los ticks ninguna bala tiene a nadie cerca.
+        AABB bulletBox = null;
 
         for (ServerPlayer player : playersInside) {
-            if (player.isRemoved() || bullet.alreadyHit.contains(player.getUUID())) continue;
+            if (player.isRemoved() || player.isSpectator() || bullet.alreadyHit.contains(player.getUUID())) continue;
             if (player.position().distanceToSqr(bulletPos) > HIT_PRECHECK_RANGE_SQ) continue;
+            if (bulletBox == null) {
+                bulletBox = hitboxOf(entity);
+            }
             if (!player.getBoundingBox().intersects(bulletBox)) continue;
 
             bullet.alreadyHit.add(player.getUUID());
-            Vec3 push = bullet.direction.scale(bulletSpeed * PUSH_MULTIPLIER);
-            player.setDeltaMovement(player.getDeltaMovement().add(push));
+            if (bulletDamage > 0) {
+                player.hurt(world.damageSources().generic(), bulletDamage);
+                // Si el balazo lo mató, eliminate() ya lo dejó de espectador:
+                // no tiene sentido empujarlo ni sacarle partículas.
+                if (player.isSpectator()) continue;
+            }
+            player.setDeltaMovement(bullet.direction.x * PUSH_STRENGTH, PUSH_UPWARD,
+                    bullet.direction.z * PUSH_STRENGTH);
             player.hurtMarked = true;
             world.sendParticles(ParticleTypes.CRIT, player.getX(), player.getY() + 1.5, player.getZ(),
                     3, 0, 0, 0, 0.1);
@@ -419,20 +477,38 @@ public class MinigameState {
     // ==================== FIN ====================
 
     public void endGame() {
-        for (UUID cannonId : activeCannons) {
-            removeEntity(cannonId);
+        // Cada cañón vive o en pendingShots (aún no disparó) o en movingBullets
+        // (su bala está volando), así que entre las dos listas se limpia todo.
+        for (PendingShot shot : pendingShots) {
+            shot.cannon.discard();
         }
         for (MovingBullet bullet : movingBullets) {
-            removeEntity(bullet.bulletId);
+            bullet.entity.discard();
+            bullet.cannon.discard();
         }
-        activeCannons.clear();
         movingBullets.clear();
         pendingShots.clear();
 
         for (ServerPlayer player : playersInside) {
-            if (player.isRemoved()) continue;
-            player.sendSystemMessage(Component.literal("§e⏰ ¡Minijuego terminado! Has sobrevivido."), false);
+            // Un recién eliminado puede seguir en la lista hasta el próximo
+            // refresco: es espectador y no le toca premio de superviviente.
+            if (player.isRemoved() || player.isSpectator() || eliminated.containsKey(player.getUUID())) continue;
+            GeoWarePointsIntegration.award(player, SURVIVOR_POINT_REWARD);
+            player.sendSystemMessage(Component.literal(
+                    "§e⏰ ¡Minijuego terminado! Has sobrevivido (+" + SURVIVOR_POINT_REWARD + " puntos)."), false);
         }
+
+        // A los muertos se les devuelve su modo de juego, de vuelta en la arena.
+        for (Map.Entry<UUID, GameType> entry : eliminated.entrySet()) {
+            ServerPlayer player = world.getServer().getPlayerList().getPlayer(entry.getKey());
+            if (player != null && player.isSpectator()) {
+                player.teleportTo(world, center.x, center.y, center.z, player.getYRot(), 0.0f);
+                player.setGameMode(entry.getValue());
+                player.sendSystemMessage(Component.literal("§e⏰ ¡Minijuego terminado! Vuelves a la arena."), false);
+            }
+        }
+        eliminated.clear();
+
         // Por trackedInside y no por playersInside: si la partida se para justo
         // después de que alguien entre, aún no está en la lista de jugadores pero
         // ya tiene la cámara aérea puesta, y hay que quitársela igual.
@@ -443,10 +519,5 @@ public class MinigameState {
         playersInside = new ArrayList<>();
         trackedInside.clear();
         remainingTicks = 0;
-    }
-
-    private void removeEntity(UUID uuid) {
-        Entity entity = world.getEntity(uuid);
-        if (entity != null) entity.discard();
     }
 }

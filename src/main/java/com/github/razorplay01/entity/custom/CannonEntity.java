@@ -28,6 +28,16 @@ public class CannonEntity extends PathfinderMob implements GeoEntity {
                 .add(Attributes.MAX_HEALTH, Double.POSITIVE_INFINITY);
     }
 
+    /**
+     * Los cañones solo existen mientras su partida los mueve: no se guardan en
+     * el disco. Sin esto, un cierre en seco a mitad de partida los dejaba
+     * spawneados para siempre al reiniciar.
+     */
+    @Override
+    public boolean shouldBeSaved() {
+        return false;
+    }
+
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "shoot_controller", state -> PlayState.STOP)

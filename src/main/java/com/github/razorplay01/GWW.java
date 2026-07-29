@@ -16,6 +16,7 @@ import com.github.razorplay01.entity.custom.util.PuzzleEntityChecker;
 import com.github.razorplay01.event.NoiseEventHandler;
 import com.github.razorplay01.client.render.MinigameBorderRenderer;
 import com.github.razorplay01.extra.CannonArenaManager;
+import com.github.razorplay01.extra.ClientMinigameState;
 import com.github.razorplay01.extra.MinigameCommand;
 import com.github.razorplay01.extra.MinigameManager;
 import com.github.razorplay01.instance.InstanceManager;
@@ -30,9 +31,11 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -59,6 +62,10 @@ public class GWW implements ModInitializer, ClientModInitializer {
             EscapeRoomController.tick(server);
             MinigameManager.tick();
         });
+        // Morir jugando a los cañones no es una muerte de verdad: la partida
+        // repone la vida y deja al jugador de espectador viendo a los demás.
+        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, damageSource, damageAmount) ->
+                !(entity instanceof ServerPlayer player && MinigameManager.onPlayerDeath(player)));
         NoiseEventHandler.register();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             MinigameCommand.register(dispatcher);
@@ -152,6 +159,9 @@ public class GWW implements ModInitializer, ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player != null) {
                 ClientNoiseState.get().tick();
+                if (ClientMinigameState.get().isActive()) {
+                    lockTopDownFacing(client.player);
+                }
             }
         });
         /*ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -163,6 +173,17 @@ public class GWW implements ModInitializer, ClientModInitializer {
                 }
             }
         });*/
+    }
+
+    /**
+     * Durante el minijuego de cañones el ratón queda anulado (PlayerTurnMixin) y
+     * el rumbo del personaje lo decide el WASD (KeyboardInputMixin). Aquí solo se
+     * mantiene la mirada horizontal, por si algo (el teleport del muro, un
+     * balazo) tocó el pitch.
+     */
+    private static void lockTopDownFacing(LocalPlayer player) {
+        player.setXRot(0.0f);
+        player.xRotO = 0.0f;
     }
 
     public static void cleanLockedSlots(ServerPlayer player) {

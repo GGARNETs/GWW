@@ -19,7 +19,7 @@ public class ModEntities {
     public static final EntityType<CannonBulletEntity> CANNON_BULLET = Registry.register(
             BuiltInRegistries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(GWW.MOD_ID, "cannon_bullet"),
             EntityType.Builder.of(CannonBulletEntity::new, MobCategory.MISC)
-                    .sized(0.8f, 0.8f).build());
+                    .sized(1.6f, 1.6f).build());
 
     public static final EntityType<UblablaEntity> UBLABLA = Registry.register(
             BuiltInRegistries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(GWW.MOD_ID, "ublabla"),

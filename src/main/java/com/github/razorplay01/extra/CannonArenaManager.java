@@ -46,8 +46,12 @@ public class CannonArenaManager {
             #   /cc arena remove <id>                   -> elimina la arena
             #   /cc arena list                          -> lista las arenas cargadas
             #   /cc arena reload                        -> recarga este archivo sin reiniciar
-            #   /cc start <id|all> <segundos> <dificultad> <velocidad_bala>
+            #   /cc start <id|all> <segundos> <dificultad> <velocidad_bala> [danio]
+            #     danio: vida que quita cada balazo (2 = 1 corazón). Opcional,
+            #     por defecto 4. Con 0 las balas solo empujan.
             #   /cc stop <id|all>
+            #     además de parar la partida, limpia cañones y balas huérfanos
+            #     de la zona (los que deja un crash o un cierre en seco)
             #
             # OJO: los comandos de arena reescriben este archivo; los comentarios
             # que añadas fuera de esta cabecera se perderán.

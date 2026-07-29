@@ -34,6 +34,12 @@ public class CannonBulletEntity extends PathfinderMob implements GeoEntity, Geck
                 .add(Attributes.MAX_HEALTH, Double.POSITIVE_INFINITY);
     }
 
+    /** Igual que el cañón: una bala huérfana en el disco no le sirve a nadie. */
+    @Override
+    public boolean shouldBeSaved() {
+        return false;
+    }
+
     @Override
     public EntityHitboxData<CannonBulletEntity> getEntityHitboxData() {
         return hitboxData;
