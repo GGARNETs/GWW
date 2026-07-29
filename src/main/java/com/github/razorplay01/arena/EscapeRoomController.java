@@ -7,6 +7,7 @@ import com.github.razorplay01.instance.Instance;
 import com.github.razorplay01.instance.InstanceManager;
 import com.github.razorplay01.integration.GeoWarePointsIntegration;
 import com.github.razorplay01.system.NoiseDetectionSystem;
+import com.github.razorplay01.system.SneakSpeedSystem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
@@ -28,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Momentos "de partida" de cada arena: el aviso de escape (válvulas resueltas + cable
@@ -70,17 +72,21 @@ public final class EscapeRoomController {
 
         escapeAlerted.removeIf(id -> !ArenaManager.isRunning(id));
 
+        // Jugadores dentro de alguna arena en marcha: son los que llevan el impulso
+        // de velocidad al agacharse mientras dura la partida.
+        Set<UUID> playersInGame = new HashSet<>();
         for (String id : List.copyOf(ArenaManager.getIds())) {
             Arena arena = ArenaManager.get(id);
             if (arena != null) {
-                processArena(server, arena);
+                processArena(server, arena, playersInGame);
             }
         }
+        SneakSpeedSystem.sync(server, playersInGame);
 
         renderPreviews();
     }
 
-    private static void processArena(MinecraftServer server, Arena arena) {
+    private static void processArena(MinecraftServer server, Arena arena, Set<UUID> playersInGame) {
         AABB zone = arena.getZoneAABB();
 
         // Jugadores que cuentan: los que están jugando (survival/aventura) dentro de la
@@ -99,6 +105,9 @@ public final class EscapeRoomController {
 
         // El aviso de escape es parte del juego: solo con la partida en marcha.
         if (ArenaManager.isRunning(arena.getId())) {
+            for (ServerPlayer player : players) {
+                playersInGame.add(player.getUUID());
+            }
             checkEscapeAlert(level, arena, players);
         }
         // La meta es independiente: se comprueba siempre.

@@ -378,7 +378,9 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
 
     @Override
     public InteractionResult interactAt(Player player, Vec3 hitVec, InteractionHand hand) {
-        if (hand != InteractionHand.MAIN_HAND || this.level().isClientSide) {
+        // El clic sobre las sub-hitboxes llega directo por interactAt, sin pasar por el
+        // filtro vanilla de espectadores: hay que cortarlo aquí.
+        if (hand != InteractionHand.MAIN_HAND || this.level().isClientSide || player.isSpectator()) {
             return super.interactAt(player, hitVec, hand);
         }
 

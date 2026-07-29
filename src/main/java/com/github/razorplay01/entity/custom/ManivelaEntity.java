@@ -3,6 +3,7 @@ package com.github.razorplay01.entity.custom;
 import com.github.razorplay01.entity.BaseInteractiveEntity;
 import com.github.razorplay01.entity.custom.util.ValvulaType;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -63,7 +64,9 @@ public class ManivelaEntity extends BaseInteractiveEntity {
 
     @Override
     public void handleNormalInteract(Player player) {
-        // Las manivelas no se pueden interactuar directamente
+        // Pista de que la manivela se transporta (shift) y encaja en una válvula.
+        player.displayClientMessage(
+                Component.literal("§eParece que esta válvula va en algún lugar..."), true);
     }
 
     @Override

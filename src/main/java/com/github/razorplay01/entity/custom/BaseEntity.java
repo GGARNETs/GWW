@@ -123,6 +123,9 @@ public abstract class BaseEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand interactionHand) {
+        if (player.isSpectator()) {
+            return InteractionResult.PASS;
+        }
         if (interactionHand.equals(InteractionHand.MAIN_HAND) && !this.level().isClientSide) {
             handleNormalInteract(player);
             return InteractionResult.SUCCESS;

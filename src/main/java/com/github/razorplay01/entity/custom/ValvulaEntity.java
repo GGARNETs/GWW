@@ -469,7 +469,7 @@ public class ValvulaEntity extends BaseEntity {
     @Override
     public boolean hurt(DamageSource damageSource, float amount) {
         if (damageSource.getEntity() instanceof Player attacker) {
-            if (!this.level().isClientSide) {
+            if (!this.level().isClientSide && !attacker.isSpectator()) {
                 turn(attacker, -1);
             }
             return false; // la válvula no recibe daño, solo gira

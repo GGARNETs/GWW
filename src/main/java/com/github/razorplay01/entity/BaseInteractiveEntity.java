@@ -189,6 +189,9 @@ public class BaseInteractiveEntity extends BaseEntity {
 
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
+        if (player.isSpectator()) {
+            return InteractionResult.PASS;
+        }
         if (!this.level().isClientSide) {
             if (player.isShiftKeyDown()) {
                 if (canBound()) {

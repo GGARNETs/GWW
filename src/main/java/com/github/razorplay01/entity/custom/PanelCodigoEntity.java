@@ -260,7 +260,9 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
     // ---------- Interacción ----------
     @Override
     public InteractionResult interactAt(Player player, Vec3 hitVec, InteractionHand hand) {
-        if (hand != InteractionHand.MAIN_HAND || this.level().isClientSide) {
+        // El clic sobre las sub-hitboxes llega directo por interactAt, sin pasar por el
+        // filtro vanilla de espectadores: hay que cortarlo aquí.
+        if (hand != InteractionHand.MAIN_HAND || this.level().isClientSide || player.isSpectator()) {
             return InteractionResult.PASS;
         }
         if (!isPowered()) {
@@ -358,10 +360,6 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         }
 
         List<String> correctSeq = getCorrectSequence();
-        if (!correctSeq.contains(partName)) {
-            return;
-        }
-
         List<String> input = getCurrentInput();
         int currentStep = input.size();
 
@@ -370,7 +368,10 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         // (campana que sube de tono vs. zumbido).
         player.displayClientMessage(Component.literal("§7Pulsación registrada."), true);
 
-        if (correctSeq.get(currentStep).equals(partName)) {
+        // Cualquier figura equivocada cuenta como fallo, incluidas las que ni siquiera
+        // están en la clave: antes esas se ignoraban en silencio y el jugador seguía
+        // pulsando sin saber que no registraban nada.
+        if (currentStep < correctSeq.size() && correctSeq.get(currentStep).equals(partName)) {
             input.add(partName);
             setCurrentInput(input);
 
@@ -398,7 +399,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         setLocked(true);
         lockTimer = LOCK_DURATION_TICKS;
         setCurrentInput(new ArrayList<>());
-        player.displayClientMessage(Component.literal("§7El panel se ha reiniciado y quedará bloqueado un momento."), true);
+        player.displayClientMessage(Component.literal("§cClave incorrecta. El panel se ha reiniciado."), true);
     }
 
     private void handleStatusButton(Player player) {

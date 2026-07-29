@@ -52,6 +52,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     public static final int STATE_CHASING = 3;
     public static final int STATE_ATTACKING = 4;
     public static final int STATE_CHECKING = 5;
+    public static final int STATE_RETURNING = 6;
 
     // Los tiempos de alerta / revisión / investigación y el umbral de ruido salen
     // de config/GWW/settings.yml (GwwSettings), comunes a todas las arenas.
@@ -63,6 +64,12 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     /** Puntos que pierde cada jugador al que el Ublabla devuelve a la jaula. */
     private static final int JAIL_POINTS_PENALTY = -50;
     private static final double LOSE_TARGET_DISTANCE_SQ = 2500.0;
+
+    /** Bloques que desanda sobre sus pasos antes del teletransporte al puesto. */
+    private static final double RETURN_WALK_DISTANCE = 4.0;
+    /** Tope de la caminata de vuelta por si se queda atascado (5 s). */
+    private static final int RETURN_MAX_TICKS = 100;
+    private static final int TRAIL_MAX_POINTS = 32;
 
     @Getter
     @Setter
@@ -88,6 +95,10 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     private int checkWaitTimer = 0;
     private int actionBarCooldown = 0;
     private String lastActionBarMessage = null;
+    /** Camino que recorrió al ir a investigar, para desandarlo al retirarse. */
+    private final List<Vec3> walkTrail = new ArrayList<>();
+    private Vec3 returnTarget = null;
+    private int returnTimer = 0;
     private final List<Vec3> linkedDoors = new ArrayList<>();
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
     private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("animation.idle");
@@ -255,6 +266,9 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
             case STATE_CHASING:
                 tickChasing();
                 break;
+            case STATE_RETURNING:
+                tickReturning();
+                break;
         }
     }
 
@@ -302,6 +316,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
 
     private void tickInvestigating() {
         investigationTimer++;
+        recordTrailStep();
 
         if (investigationTarget != null && this.position().distanceToSqr(Vec3.atCenterOf(investigationTarget)) <= 2.25) {
             setState(STATE_CHECKING);
@@ -313,7 +328,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
 
         if (investigationTimer > GwwSettings.investigationTimeoutTicks()) {
             broadcastMessage("No encuentro el lugar... mejor me retiro.");
-            resetToPatrol();
+            startReturning();
         }
     }
 
@@ -336,6 +351,59 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
             }
         } else {
             broadcastMessage("Solo fue mi imaginación...");
+            startReturning();
+        }
+    }
+
+    /** Apunta un rastro del camino andado (un punto por bloque, acotado). */
+    private void recordTrailStep() {
+        Vec3 pos = position();
+        if (walkTrail.isEmpty() || walkTrail.get(walkTrail.size() - 1).distanceToSqr(pos) >= 1.0) {
+            walkTrail.add(pos);
+            if (walkTrail.size() > TRAIL_MAX_POINTS) {
+                walkTrail.remove(0);
+            }
+        }
+    }
+
+    /**
+     * Al retirarse sin pillar a nadie no desaparece a la vista de todos: desanda unos
+     * bloques de su propio camino y recién ahí, ya fuera de la vista, se teletransporta
+     * a su puesto. Si no hay rastro que desandar, vuelve directo como antes.
+     */
+    private void startReturning() {
+        Vec3 target = findReturnPoint();
+        if (target == null) {
+            resetToPatrol();
+            return;
+        }
+        setState(STATE_RETURNING);
+        returnTarget = target;
+        returnTimer = 0;
+        getNavigation().moveTo(target.x, target.y, target.z, 1.0);
+    }
+
+    /** Punto del rastro que queda a {@value #RETURN_WALK_DISTANCE} bloques andados hacia atrás. */
+    private Vec3 findReturnPoint() {
+        double walked = 0;
+        Vec3 prev = position();
+        for (int i = walkTrail.size() - 1; i >= 0; i--) {
+            Vec3 point = walkTrail.get(i);
+            walked += prev.distanceTo(point);
+            prev = point;
+            if (walked >= RETURN_WALK_DISTANCE) {
+                return point;
+            }
+        }
+        return walkTrail.isEmpty() ? null : walkTrail.get(0);
+    }
+
+    private void tickReturning() {
+        returnTimer++;
+        boolean arrived = returnTarget == null
+                || position().distanceToSqr(returnTarget) <= 1.5
+                || getNavigation().isDone();
+        if (arrived || returnTimer >= RETURN_MAX_TICKS) {
             resetToPatrol();
         }
     }
@@ -508,6 +576,9 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         investigationTimer = 0;
         checkWaitTimer = 0;
         lastActionBarMessage = null;
+        walkTrail.clear();
+        returnTarget = null;
+        returnTimer = 0;
         broadcastMessage("Volviendo a mi puesto...");
     }
 
