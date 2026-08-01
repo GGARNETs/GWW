@@ -13,7 +13,7 @@ import java.util.UUID;
 
 /**
  * Con la partida en marcha se pasa mucho tiempo agachado por el sistema de ruido,
- * así que a los jugadores dentro de una arena en marcha se les sube un 30% la
+ * así que a los jugadores dentro de una arena en marcha se les duplica la
  * velocidad al andar agachados. El modificador es transitorio: no se guarda en el
  * NBT del jugador, y si sale de la arena (o se para la partida) el siguiente
  * barrido se lo quita. Al ser un atributo vanilla, el cliente lo recibe solo y el
@@ -26,7 +26,9 @@ public final class SneakSpeedSystem {
 
     private static final ResourceLocation MODIFIER_ID =
             ResourceLocation.fromNamespaceAndPath(GWW.MOD_ID, "escape_room_sneak_boost");
-    private static final double SNEAK_SPEED_BOOST = 0.30;
+    // Base vanilla 0.30 (30% de la velocidad al caminar) -> 0.30 * 2.00 = 0.60, o sea
+    // un 60% de la velocidad al caminar: rápido pero sin llegar a andar normal.
+    private static final double SNEAK_SPEED_BOOST = 1.00;
 
     /**
      * Deja el modificador puesto exactamente en los jugadores del set y en nadie más.
