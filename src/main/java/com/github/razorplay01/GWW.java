@@ -25,6 +25,7 @@ import com.github.razorplay01.item.ModItems;
 import com.github.razorplay01.network.ClientNetworkManager;
 import com.github.razorplay01.network.FabricCustomPayload;
 import com.github.razorplay01.network.ServerNetworkManager;
+import com.github.razorplay01.sound.ModSounds;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.ModInitializer;
 
@@ -75,6 +76,7 @@ public class GWW implements ModInitializer, ClientModInitializer {
         });
         ModComponents.register();
         ModItems.registerModItems();
+        ModSounds.registerModSounds();
         ModAttributes.register();
         PuzzleEntityChecker.registerDefaultCheckers();
         ModEntities.registerModEntities();

@@ -4,13 +4,12 @@ import com.github.razorplay01.arena.Arena;
 import com.github.razorplay01.arena.ArenaLight;
 import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.entity.custom.util.Util;
+import com.github.razorplay01.sound.ModSounds;
 import lombok.Getter;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -76,8 +75,32 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         if (!this.level().isClientSide) {
             Arena arena = ArenaManager.getArenaAt(this.position());
             if (arena != null) {
-                ArenaLight.refresh(this.level(), arena, ArenaLight.isOn(this.level(), arena));
+                boolean lightOn = ArenaLight.isOn(this.level(), arena);
+                ArenaLight.refresh(this.level(), arena, lightOn);
+                playLightSound(nowOn, lightOn);
             }
+        }
+    }
+
+    /**
+     * El sonido sigue a la luz real, no a la posición de la palanca: con el cable
+     * cortado, subir el interruptor solo da un chispazo y la sala sigue a oscuras.
+     * <p>
+     * tickCount == 0 es la carga del chunk: ahí el estado se restaura desde NBT y no
+     * debe sonar nada.
+     */
+    private void playLightSound(boolean nowOn, boolean lightOn) {
+        if (this.tickCount == 0) {
+            return;
+        }
+        if (lightOn) {
+            ModSounds.playAt(this, ModSounds.POWER_UP, 0.8F, 1.0F);
+            ModSounds.playAt(this, ModSounds.LIGHT_ON, 0.9F, 1.0F);
+        } else if (nowOn) {
+            ModSounds.playAt(this, ModSounds.SPARK_FAIL, 0.6F, 0.9F);
+        } else {
+            ModSounds.playAt(this, ModSounds.POWER_DOWN, 0.8F, 1.0F);
+            ModSounds.playAt(this, ModSounds.LIGHT_OFF, 0.9F, 1.0F);
         }
     }
 
@@ -152,14 +175,13 @@ public class InterruptorIndustrialEntity extends BaseEntity {
 
         if (areAllCablesReady()) {
             boolean newState = !isOn();
+            ModSounds.playAt(this, newState ? ModSounds.SWITCH_ON : ModSounds.SWITCH_OFF, 0.9F, 1.0F);
             setState(newState ? 1 : 0);
-            this.level().playSound(null, this.blockPosition(),
-                    SoundEvents.LEVER_CLICK, SoundSource.BLOCKS, 0.8F, newState ? 1.0F : 0.7F);
         } else {
             // Chispazo y aviso vago: que la palanca no responda es la pista, sin
             // decirle al jugador que el fallo está en los cables.
-            this.level().playSound(null, this.blockPosition(),
-                    SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.6F);
+            ModSounds.playAt(this, ModSounds.SWITCH_ON, 0.5F, 1.0F);
+            ModSounds.playAt(this, ModSounds.SPARK_FAIL, 0.8F, 1.0F);
             player.displayClientMessage(net.minecraft.network.chat.Component.literal(
                     "§cNo pasa corriente."), true);
         }

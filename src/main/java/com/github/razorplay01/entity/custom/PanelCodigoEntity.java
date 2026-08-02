@@ -9,8 +9,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
@@ -32,6 +30,7 @@ import java.util.Map;
 
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
 import com.github.razorplay01.entity.custom.util.SelfHealingHitboxes;
+import com.github.razorplay01.sound.ModSounds;
 
 import static com.github.razorplay01.entity.custom.util.Util.*;
 
@@ -238,6 +237,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
                 setLocked(false);
                 setCurrentInput(new ArrayList<>());
                 lockTimer = 0;
+                ModSounds.playAt(this, ModSounds.PANEL_READY, 0.8F, 1.0F);
                 this.level().getEntitiesOfClass(Player.class, this.getBoundingBox().inflate(8.0))
                         .forEach(p -> p.displayClientMessage(
                                 Component.literal("§7El panel vuelve a estar operativo."), true));
@@ -266,6 +266,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
             return InteractionResult.PASS;
         }
         if (!isPowered()) {
+            ModSounds.playAt(this, ModSounds.PANEL_OFF, 0.7F, 1.0F);
             player.displayClientMessage(Component.literal("§cEl panel está apagado."), true);
             return InteractionResult.PASS;
         }
@@ -353,8 +354,12 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
             return;
         }
 
+        // El clic de la membrana suena siempre, acierte o no: es el tacto del botón,
+        // no el resultado. Lo que delata el acierto es el bip que viene después.
+        ModSounds.playAt(this, ModSounds.BUTTON_PRESS, 0.8F, 1.0F);
+
         if (isLocked()) {
-            playSound(player, false);
+            ModSounds.playAt(this, ModSounds.PANEL_LOCKED, 0.8F, 1.0F);
             player.displayClientMessage(Component.literal("§7El panel está bloqueado, espera un momento."), true);
             return;
         }
@@ -387,6 +392,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
     }
 
     private void onPuzzleSolved() {
+        ModSounds.playAt(this, ModSounds.CODE_CORRECT, 1.0F, 1.0F);
         setSolved(true);
         setCurrentInput(new ArrayList<>());
         updateAllLinkedDoors();
@@ -403,21 +409,25 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
     }
 
     private void handleStatusButton(Player player) {
+        ModSounds.playAt(this, ModSounds.BUTTON_PRESS, 0.8F, 0.92F);
         if (isSolved()) {
             toggleLinkedDoors();
         } else if (isLocked()) {
-            playSound(player, false);
+            ModSounds.playAt(this, ModSounds.PANEL_LOCKED, 0.8F, 1.0F);
             player.displayClientMessage(Component.literal("§7El panel está bloqueado, espera un momento."), true);
         }
     }
 
+    /**
+     * Acierto parcial: el piloto sube de tono con cada figura registrada, así se oye
+     * el avance sin decir cuántas faltan. El fallo es un zumbido grave y seco.
+     */
     private void playSound(Player player, boolean success) {
         if (success) {
-            this.level().playSound(null, this.blockPosition(),
-                    SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.BLOCKS, 1.0F, 1.0F + (getCurrentInput().size() * 0.15F));
+            ModSounds.playAt(this, ModSounds.LIGHT_INDICATOR, 0.9F,
+                    1.0F + (getCurrentInput().size() * 0.12F));
         } else {
-            this.level().playSound(null, this.blockPosition(),
-                    SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.BLOCKS, 1.0F, 0.5F);
+            ModSounds.playAt(this, ModSounds.CODE_WRONG, 1.0F, 1.0F);
         }
     }
 

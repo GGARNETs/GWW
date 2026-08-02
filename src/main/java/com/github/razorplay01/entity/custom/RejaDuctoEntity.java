@@ -2,6 +2,7 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.entity.custom.util.Util;
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.CompoundTag;
@@ -66,7 +67,21 @@ public class RejaDuctoEntity extends BaseEntity {
     }
 
     public void setRejaState(int state) {
+        int previous = getRejaState();
         this.entityData.set(DATA_STATE, state);
+        if (previous == state || this.level().isClientSide) {
+            return;
+        }
+        // Abrirse a medias suena a metal que cede pero se queda trabado; abrirse del
+        // todo, a reja que corre entera.
+        if (state == STATE_SEMI_OPEN) {
+            ModSounds.playAt(this, ModSounds.VENT_OPEN, 0.8F, 0.9F);
+            ModSounds.playAt(this, ModSounds.VENT_STUCK, 0.7F, 0.95F);
+        } else if (state == STATE_OPEN) {
+            ModSounds.playAt(this, ModSounds.VENT_OPEN, 1.0F, 1.0F);
+        } else {
+            ModSounds.playAt(this, ModSounds.DOOR_CAGE_CLOSE, 0.9F, 1.05F);
+        }
     }
 
     /** Solo cuenta como "abierta" (deja pasar) el estado totalmente abierto. */
@@ -179,6 +194,7 @@ public class RejaDuctoEntity extends BaseEntity {
         if (valvesSolved()) {
             setRejaState(STATE_OPEN);
         } else {
+            ModSounds.playAt(this, ModSounds.VENT_STUCK, 0.8F, 1.0F);
             player.displayClientMessage(Component.literal(
                     "§cLa presión es demasiada para pasar. Ajusta las válvulas."), true);
         }
@@ -196,10 +212,11 @@ public class RejaDuctoEntity extends BaseEntity {
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         // "State" es el formato nuevo; los .dat viejos solo traían el booleano "IsOpen".
+        // Directo al dato para que cargar el chunk no dispare el sonido de apertura.
         if (tag.contains("State")) {
-            setRejaState(tag.getInt("State"));
+            this.entityData.set(DATA_STATE, tag.getInt("State"));
         } else {
-            setOpen(tag.getBoolean("IsOpen"));
+            this.entityData.set(DATA_STATE, tag.getBoolean("IsOpen") ? STATE_OPEN : STATE_CLOSED);
         }
         if (tag.contains("Facing")) {
             Direction dir = Direction.byName(tag.getString("Facing"));

@@ -2,11 +2,13 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.entity.BaseInteractiveEntity;
 import com.github.razorplay01.entity.custom.util.ValvulaType;
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
@@ -74,6 +76,12 @@ public class ManivelaEntity extends BaseInteractiveEntity {
         return true;
     }
 
+    /** La manivela es la pieza pequeña: al caer tintinea, no golpea como la escalera. */
+    @Override
+    protected SoundEvent getLandSound() {
+        return ModSounds.FALL_SMALL_METAL;
+    }
+
     @Override
     public void tick() {
         super.tick();
@@ -87,6 +95,7 @@ public class ManivelaEntity extends BaseInteractiveEntity {
                     .forEach(valvula -> {
                         if (valvula.getValType() == this.getValType() && !valvula.hasManivela()) {
                             valvula.attachManivela(this.getValType());
+                            ModSounds.playAt(valvula, ModSounds.CRANK_ATTACH, 1.0F, 1.0F);
                             if (this.getCachedBoundPlayer() != null) {
                                 onUnbound(this.getCachedBoundPlayer());
                             }

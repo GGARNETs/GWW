@@ -1,8 +1,10 @@
 package com.github.razorplay01.entity;
 
 import com.github.razorplay01.entity.custom.BaseEntity;
+import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import lombok.Getter;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -38,6 +40,8 @@ public class BaseInteractiveEntity extends BaseEntity {
 
     private static final float DISTANCE_FROM_PLAYER = 1.9F;
     private static final double MAX_MOVE_PER_TICK = 1.5;
+    /** Por debajo de esto el objeto solo se está asentando: no suena. */
+    private static final double MIN_LANDING_SPEED = 0.12;
 
     public BaseInteractiveEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -148,6 +152,7 @@ public class BaseInteractiveEntity extends BaseEntity {
      */
     protected void handleGravityAndMovement() {
         Vec3 motion = this.getDeltaMovement();
+        boolean groundedBefore = this.onGround();
 
         if (!this.onGround()) {
             motion = motion.add(0, -0.08, 0);
@@ -169,6 +174,17 @@ public class BaseInteractiveEntity extends BaseEntity {
             return;
         }
         this.move(MoverType.SELF, this.getDeltaMovement());
+
+        // El objeto acaba de tocar el suelo: suena una sola vez y con el peso de la
+        // caída, así soltar la palanca a los pies no suena igual que tirarla desde
+        // lo alto de la escalera.
+        if (!groundedBefore && this.onGround()) {
+            double fallSpeed = Math.abs(motion.y);
+            if (fallSpeed > MIN_LANDING_SPEED) {
+                float volume = (float) Math.min(1.0, 0.35 + fallSpeed * 1.2);
+                ModSounds.playAt(this, getLandSound(), volume, randomPitch());
+            }
+        }
     }
 
     private void updateRotationTowardsPlayer(Player player) {
@@ -215,15 +231,40 @@ public class BaseInteractiveEntity extends BaseEntity {
             if (isPlayerBound(player)) {
                 unbind();
                 onUnbound(player);
+                ModSounds.playAt(this, getReleaseSound(), 0.7F, randomPitch());
                 NoiseDetectionSystem.addNoise(player, 0.3f);
             } else {
+                ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.5F, 1.0F);
                 player.sendSystemMessage(Component.literal("§c¡Esta entidad está vinculada a otro jugador!"));
             }
         } else {
             bind(player);
             onBound(player);
+            ModSounds.playAt(this, getGrabSound(), 0.7F, randomPitch());
             NoiseDetectionSystem.addNoise(player, 0.3f);
         }
+    }
+
+    /**
+     * Sonidos de manipulación. Por defecto suenan a metal, que es lo que son la
+     * palanca, la manivela y la escalera; los cuadros los sobrescriben con madera.
+     */
+    protected SoundEvent getGrabSound() {
+        return ModSounds.GRAB_METAL;
+    }
+
+    protected SoundEvent getReleaseSound() {
+        return ModSounds.GRAB_METAL;
+    }
+
+    /** Golpe contra el suelo al soltar el objeto en el aire. */
+    protected SoundEvent getLandSound() {
+        return ModSounds.DROP_METAL;
+    }
+
+    /** Variación leve para que agarrar lo mismo diez veces no suene idéntico. */
+    protected float randomPitch() {
+        return 0.94F + this.random.nextFloat() * 0.12F;
     }
 
     public void bind(Player player) {

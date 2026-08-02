@@ -1,5 +1,6 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -45,7 +46,11 @@ public class PuertaMetalicaEntity extends BaseEntity {
     }
 
     public void setOpen(boolean open) {
+        boolean wasOpen = isOpen();
         this.entityData.set(IS_OPEN, open);
+        if (wasOpen != open && !this.level().isClientSide) {
+            ModSounds.playAt(this, open ? ModSounds.DOOR_METAL_OPEN : ModSounds.DOOR_METAL_CLOSE, 1.0F, 1.0F);
+        }
     }
 
     public Direction getFacing() {
@@ -75,7 +80,9 @@ public class PuertaMetalicaEntity extends BaseEntity {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        setOpen(tag.getBoolean("IsOpen"));
+        // Directo al dato, sin pasar por setOpen: una puerta que ya estaba abierta al
+        // guardarse no debe volver a sonar cada vez que se carga el chunk.
+        this.entityData.set(IS_OPEN, tag.getBoolean("IsOpen"));
         if (tag.contains("Facing")) {
             Direction dir = Direction.byName(tag.getString("Facing"));
             if (dir != null) {

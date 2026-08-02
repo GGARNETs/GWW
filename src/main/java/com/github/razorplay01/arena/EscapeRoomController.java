@@ -6,6 +6,7 @@ import com.github.razorplay01.entity.custom.ValvulaEntity;
 import com.github.razorplay01.instance.Instance;
 import com.github.razorplay01.instance.InstanceManager;
 import com.github.razorplay01.integration.GeoWarePointsIntegration;
+import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import com.github.razorplay01.system.SneakSpeedSystem;
 import net.minecraft.ChatFormatting;
@@ -18,7 +19,6 @@ import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
@@ -140,7 +140,9 @@ public final class EscapeRoomController {
             player.connection.send(new ClientboundSetTitlesAnimationPacket(5, 100, 20)); // ~5 s
             player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
             player.connection.send(new ClientboundSetTitleTextPacket(title));
-            player.playNotifySound(SoundEvents.WITHER_SPAWN, SoundSource.MASTER, 1.0f, 1.0f);
+            // El aviso de escape es el bicho, no una sirena: lo que se oye es al
+            // Ublabla rugiendo, que es quien los tiene ahí encerrados.
+            player.playNotifySound(ModSounds.UBLABLA_ROAR, SoundSource.MASTER, 1.0f, 1.0f);
         }
 
         BlockPos target = players.get(0).blockPosition();
@@ -186,7 +188,7 @@ public final class EscapeRoomController {
             player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 80, 20));
             player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
             player.connection.send(new ClientboundSetTitleTextPacket(title));
-            player.playNotifySound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.MASTER, 1.0f, 1.0f);
+            player.playNotifySound(ModSounds.VICTORY, SoundSource.MASTER, 1.0f, 1.0f);
             GeoWarePointsIntegration.award(player, VICTORY_POINTS);
             player.setGameMode(GameType.SPECTATOR);
         }

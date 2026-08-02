@@ -1,0 +1,482 @@
+{
+  "blocked_thud": {
+    "category": "block",
+    "subtitle": "subtitles.gww.blocked_thud",
+    "sounds": [
+      {
+        "name": "gww:objetos/blocked_thud",
+        "stream": false
+      }
+    ]
+  },
+  "button_press": {
+    "category": "block",
+    "subtitle": "subtitles.gww.button_press",
+    "sounds": [
+      {
+        "name": "gww:paneles/button_press",
+        "stream": false
+      }
+    ]
+  },
+  "cable_cut": {
+    "category": "block",
+    "subtitle": "subtitles.gww.cable_cut",
+    "sounds": [
+      {
+        "name": "gww:electricidad/cable_cut",
+        "stream": false
+      }
+    ]
+  },
+  "cable_plug": {
+    "category": "block",
+    "subtitle": "subtitles.gww.cable_plug",
+    "sounds": [
+      {
+        "name": "gww:electricidad/cable_plug",
+        "stream": false
+      }
+    ]
+  },
+  "cable_rotate": {
+    "category": "block",
+    "subtitle": "subtitles.gww.cable_rotate",
+    "sounds": [
+      {
+        "name": "gww:electricidad/cable_rotate",
+        "stream": false
+      }
+    ]
+  },
+  "cannon_fire": {
+    "category": "neutral",
+    "subtitle": "subtitles.gww.cannon_fire",
+    "sounds": [
+      {
+        "name": "gww:partida/cannon_fire",
+        "stream": false
+      }
+    ]
+  },
+  "circuit_complete": {
+    "category": "block",
+    "subtitle": "subtitles.gww.circuit_complete",
+    "sounds": [
+      {
+        "name": "gww:paneles/circuit_complete",
+        "stream": false
+      }
+    ]
+  },
+  "code_correct": {
+    "category": "block",
+    "subtitle": "subtitles.gww.code_correct",
+    "sounds": [
+      {
+        "name": "gww:paneles/code_correct",
+        "stream": false
+      }
+    ]
+  },
+  "code_wrong": {
+    "category": "block",
+    "subtitle": "subtitles.gww.code_wrong",
+    "sounds": [
+      {
+        "name": "gww:paneles/code_wrong",
+        "stream": false
+      }
+    ]
+  },
+  "crank_attach": {
+    "category": "block",
+    "subtitle": "subtitles.gww.crank_attach",
+    "sounds": [
+      {
+        "name": "gww:valvulas/crank_attach",
+        "stream": false
+      }
+    ]
+  },
+  "crate_break": {
+    "category": "block",
+    "subtitle": "subtitles.gww.crate_break",
+    "sounds": [
+      {
+        "name": "gww:cajas/crate_break",
+        "stream": false
+      }
+    ]
+  },
+  "door_attic_open": {
+    "category": "block",
+    "subtitle": "subtitles.gww.door_attic_open",
+    "sounds": [
+      {
+        "name": "gww:puertas/door_attic_open",
+        "stream": false
+      }
+    ]
+  },
+  "door_cage_close": {
+    "category": "block",
+    "subtitle": "subtitles.gww.door_cage_close",
+    "sounds": [
+      {
+        "name": "gww:puertas/door_cage_close",
+        "stream": false
+      }
+    ]
+  },
+  "door_cage_open": {
+    "category": "block",
+    "subtitle": "subtitles.gww.door_cage_open",
+    "sounds": [
+      {
+        "name": "gww:puertas/door_cage_open",
+        "stream": false
+      }
+    ]
+  },
+  "door_metal_close": {
+    "category": "block",
+    "subtitle": "subtitles.gww.door_metal_close",
+    "sounds": [
+      {
+        "name": "gww:puertas/door_metal_close",
+        "stream": false
+      }
+    ]
+  },
+  "door_metal_open": {
+    "category": "block",
+    "subtitle": "subtitles.gww.door_metal_open",
+    "sounds": [
+      {
+        "name": "gww:puertas/door_metal_open",
+        "stream": false
+      }
+    ]
+  },
+  "drop_metal": {
+    "category": "block",
+    "subtitle": "subtitles.gww.drop_metal",
+    "sounds": [
+      {
+        "name": "gww:objetos/drop_metal",
+        "stream": false
+      }
+    ]
+  },
+  "electrocute": {
+    "category": "block",
+    "subtitle": "subtitles.gww.electrocute",
+    "sounds": [
+      {
+        "name": "gww:electricidad/electrocute",
+        "stream": false
+      }
+    ]
+  },
+  "fall_small_metal": {
+    "category": "block",
+    "subtitle": "subtitles.gww.fall_small_metal",
+    "sounds": [
+      {
+        "name": "gww:objetos/fall_small_metal",
+        "stream": false
+      }
+    ]
+  },
+  "fuse_insert": {
+    "category": "block",
+    "subtitle": "subtitles.gww.fuse_insert",
+    "sounds": [
+      {
+        "name": "gww:paneles/fuse_insert",
+        "stream": false
+      }
+    ]
+  },
+  "fuse_remove": {
+    "category": "block",
+    "subtitle": "subtitles.gww.fuse_remove",
+    "sounds": [
+      {
+        "name": "gww:paneles/fuse_remove",
+        "stream": false
+      }
+    ]
+  },
+  "gas_leak": {
+    "category": "ambient",
+    "subtitle": "subtitles.gww.gas_leak",
+    "sounds": [
+      {
+        "name": "gww:valvulas/gas_leak",
+        "stream": false
+      }
+    ]
+  },
+  "grab_metal": {
+    "category": "block",
+    "subtitle": "subtitles.gww.grab_metal",
+    "sounds": [
+      {
+        "name": "gww:objetos/grab_metal",
+        "stream": false
+      }
+    ]
+  },
+  "items_spill": {
+    "category": "block",
+    "subtitle": "subtitles.gww.items_spill",
+    "sounds": [
+      {
+        "name": "gww:cajas/items_spill",
+        "stream": false
+      }
+    ]
+  },
+  "light_indicator": {
+    "category": "block",
+    "subtitle": "subtitles.gww.light_indicator",
+    "sounds": [
+      {
+        "name": "gww:paneles/light_indicator",
+        "stream": false
+      }
+    ]
+  },
+  "light_off": {
+    "category": "block",
+    "subtitle": "subtitles.gww.light_off",
+    "sounds": [
+      {
+        "name": "gww:electricidad/light_off",
+        "stream": false
+      }
+    ]
+  },
+  "light_on": {
+    "category": "block",
+    "subtitle": "subtitles.gww.light_on",
+    "sounds": [
+      {
+        "name": "gww:electricidad/light_on",
+        "stream": false
+      }
+    ]
+  },
+  "lock_open": {
+    "category": "block",
+    "subtitle": "subtitles.gww.lock_open",
+    "sounds": [
+      {
+        "name": "gww:puertas/lock_open",
+        "stream": false
+      }
+    ]
+  },
+  "lock_pick": {
+    "category": "block",
+    "subtitle": "subtitles.gww.lock_pick",
+    "sounds": [
+      {
+        "name": "gww:puertas/lock_pick",
+        "stream": false
+      }
+    ]
+  },
+  "noise_alert": {
+    "category": "ambient",
+    "subtitle": "subtitles.gww.noise_alert",
+    "sounds": [
+      {
+        "name": "gww:partida/noise_alert",
+        "stream": false
+      }
+    ]
+  },
+  "painting_set": {
+    "category": "block",
+    "subtitle": "subtitles.gww.painting_set",
+    "sounds": [
+      {
+        "name": "gww:objetos/painting_set",
+        "stream": false
+      }
+    ]
+  },
+  "painting_slide": {
+    "category": "block",
+    "subtitle": "subtitles.gww.painting_slide",
+    "sounds": [
+      {
+        "name": "gww:objetos/painting_slide",
+        "stream": false
+      }
+    ]
+  },
+  "panel_locked": {
+    "category": "block",
+    "subtitle": "subtitles.gww.panel_locked",
+    "sounds": [
+      {
+        "name": "gww:paneles/panel_locked",
+        "stream": false
+      }
+    ]
+  },
+  "panel_off": {
+    "category": "block",
+    "subtitle": "subtitles.gww.panel_off",
+    "sounds": [
+      {
+        "name": "gww:paneles/panel_off",
+        "stream": false
+      }
+    ]
+  },
+  "panel_ready": {
+    "category": "block",
+    "subtitle": "subtitles.gww.panel_ready",
+    "sounds": [
+      {
+        "name": "gww:paneles/panel_ready",
+        "stream": false
+      }
+    ]
+  },
+  "paper_open": {
+    "category": "player",
+    "subtitle": "subtitles.gww.paper_open",
+    "sounds": [
+      {
+        "name": "gww:objetos/paper_open",
+        "stream": false
+      }
+    ]
+  },
+  "pendant_fall": {
+    "category": "block",
+    "subtitle": "subtitles.gww.pendant_fall",
+    "sounds": [
+      {
+        "name": "gww:objetos/pendant_fall",
+        "stream": false
+      }
+    ]
+  },
+  "power_down": {
+    "category": "block",
+    "subtitle": "subtitles.gww.power_down",
+    "sounds": [
+      {
+        "name": "gww:electricidad/power_down",
+        "stream": false
+      }
+    ]
+  },
+  "power_up": {
+    "category": "block",
+    "subtitle": "subtitles.gww.power_up",
+    "sounds": [
+      {
+        "name": "gww:electricidad/power_up",
+        "stream": false
+      }
+    ]
+  },
+  "spark_fail": {
+    "category": "block",
+    "subtitle": "subtitles.gww.spark_fail",
+    "sounds": [
+      {
+        "name": "gww:electricidad/spark_fail",
+        "stream": false
+      }
+    ]
+  },
+  "switch_off": {
+    "category": "block",
+    "subtitle": "subtitles.gww.switch_off",
+    "sounds": [
+      {
+        "name": "gww:electricidad/switch_off",
+        "stream": false
+      }
+    ]
+  },
+  "switch_on": {
+    "category": "block",
+    "subtitle": "subtitles.gww.switch_on",
+    "sounds": [
+      {
+        "name": "gww:electricidad/switch_on",
+        "stream": false
+      }
+    ]
+  },
+  "toolbox_open": {
+    "category": "block",
+    "subtitle": "subtitles.gww.toolbox_open",
+    "sounds": [
+      {
+        "name": "gww:cajas/toolbox_open",
+        "stream": false
+      }
+    ]
+  },
+  "ublabla_roar": {
+    "category": "hostile",
+    "subtitle": "subtitles.gww.ublabla_roar",
+    "sounds": [
+      {
+        "name": "gww:partida/ublabla_roar",
+        "stream": false
+      }
+    ]
+  },
+  "valve_turn": {
+    "category": "block",
+    "subtitle": "subtitles.gww.valve_turn",
+    "sounds": [
+      {
+        "name": "gww:valvulas/valve_turn",
+        "stream": false
+      }
+    ]
+  },
+  "vent_open": {
+    "category": "block",
+    "subtitle": "subtitles.gww.vent_open",
+    "sounds": [
+      {
+        "name": "gww:puertas/vent_open",
+        "stream": false
+      }
+    ]
+  },
+  "vent_stuck": {
+    "category": "block",
+    "subtitle": "subtitles.gww.vent_stuck",
+    "sounds": [
+      {
+        "name": "gww:puertas/vent_stuck",
+        "stream": false
+      }
+    ]
+  },
+  "victory": {
+    "category": "ambient",
+    "subtitle": "subtitles.gww.victory",
+    "sounds": [
+      {
+        "name": "gww:partida/victory",
+        "stream": false
+      }
+    ]
+  }
+}

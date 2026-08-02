@@ -2,6 +2,7 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.entity.BaseInteractiveEntity;
 import com.github.razorplay01.entity.custom.util.EscapeRoomPersistable;
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -141,6 +142,7 @@ public class PalancaEntity extends BaseInteractiveEntity implements EscapeRoomPe
     }
 
     protected void onPuzzleSolved() {
+        ModSounds.playAt(this, ModSounds.CRANK_ATTACH, 0.85F, 1.05F);
     }
 
     protected void onPuzzleUnsolved() {

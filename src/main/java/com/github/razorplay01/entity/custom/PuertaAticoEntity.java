@@ -1,6 +1,7 @@
 package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.item.ModItems;
+import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -81,9 +82,12 @@ public class PuertaAticoEntity extends BaseEntity {
                 if (hasRequiredItem(player)) {
                     consumeRequiredItem(player);
                     setOpen(true);
+                    ModSounds.playAt(this, ModSounds.LOCK_OPEN, 0.9F, 0.95F);
+                    ModSounds.playAt(this, ModSounds.DOOR_ATTIC_OPEN, 1.0F, 1.0F);
                     NoiseDetectionSystem.addNoise(player, 1.0f);
                     player.sendSystemMessage(Component.literal("§a¡Has abierto la puerta del ático!"));
                 } else {
+                    ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 0.95F);
                     player.sendSystemMessage(Component.literal("§cNecesitas un §bobjeto §cpara abrir esta puerta"));
                 }
             }

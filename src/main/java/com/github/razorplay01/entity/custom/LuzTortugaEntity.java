@@ -1,5 +1,6 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -34,7 +35,14 @@ public class LuzTortugaEntity extends BaseEntity {
 
     public void setState(int state) {
         if (state < 0 || state > 2) state = 0;
+        int previous = this.entityData.get(STATE);
         this.entityData.set(STATE, state);
+
+        // El piloto avisa al cambiar, y sube de tono según lo cerca que esté el puzzle:
+        // apagado -> lleno -> resuelto. tickCount == 0 es la carga del chunk.
+        if (previous != state && this.tickCount > 0) {
+            ModSounds.playAt(this, ModSounds.LIGHT_INDICATOR, 0.6F, 0.85F + state * 0.15F);
+        }
     }
 
     @Override

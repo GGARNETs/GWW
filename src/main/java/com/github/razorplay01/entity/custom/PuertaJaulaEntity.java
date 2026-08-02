@@ -1,6 +1,7 @@
 package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.item.ModItems;
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -136,10 +137,12 @@ public class PuertaJaulaEntity extends BaseEntity {
 
     private void startUnlocking() {
         setAnimState(AnimState.UNLOCKING);
+        ModSounds.playAt(this, ModSounds.LOCK_PICK, 0.9F, 1.0F);
     }
 
     private void startOpening() {
         setAnimState(AnimState.OPENING);
+        ModSounds.playAt(this, ModSounds.DOOR_CAGE_OPEN, 1.0F, 1.0F);
     }
 
     private void completeOpen() {
@@ -149,6 +152,7 @@ public class PuertaJaulaEntity extends BaseEntity {
 
     private void startClosing() {
         setAnimState(AnimState.CLOSING);
+        ModSounds.playAt(this, ModSounds.DOOR_CAGE_CLOSE, 1.0F, 1.0F);
     }
 
     private void completeClose() {
@@ -177,6 +181,7 @@ public class PuertaJaulaEntity extends BaseEntity {
                 // Cuando termina la animación de unlock, pasa a abrir
                 if (animationTimer >= UNLOCK_ANIM_DURATION) {
                     setUnlocked(true);
+                    ModSounds.playAt(this, ModSounds.LOCK_OPEN, 1.0F, 1.0F);
                     startOpening();
                 }
                 break;
@@ -276,6 +281,7 @@ public class PuertaJaulaEntity extends BaseEntity {
                     startUnlocking();
                     player.sendSystemMessage(Component.literal("§aDesbloqueando la puerta..."));
                 } else {
+                    ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 1.0F);
                     player.sendSystemMessage(Component.literal(
                             "§cNecesitas un §bGanzúa §cpara desbloquear esta puerta"));
                 }

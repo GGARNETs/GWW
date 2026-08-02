@@ -3,6 +3,7 @@ package com.github.razorplay01.entity.custom;
 import com.github.razorplay01.GWW;
 import com.github.razorplay01.entity.ModEntities;
 import com.github.razorplay01.item.ModItems;
+import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -12,8 +13,6 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
@@ -73,7 +72,7 @@ public class CajaEntity extends BaseEntity {
         this.entityData.set(IS_OPEN, open);
         if (open && !this.level().isClientSide) {
             openAnimationTicks = 0;
-            this.level().playSound(null, this.blockPosition(), SoundEvents.CHEST_OPEN, SoundSource.BLOCKS, 1.0F, 1.0F);
+            ModSounds.playAt(this, ModSounds.CRATE_BREAK, 1.0F, 1.0F);
             // La caja no la abre nadie con la mano, salta por una colisión: el ruido
             // se le apunta al jugador jugable más cercano.
             NoiseDetectionSystem.addNoiseNearby(this, 20.0D, 1.0f);
@@ -142,7 +141,7 @@ public class CajaEntity extends BaseEntity {
 
     protected void onOpenedByCollision(PalancaEntity triggerEntity) {
         if (!this.level().isClientSide) {
-            this.level().playSound(null, this.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.BLOCKS, 0.5F, 1.5F);
+            ModSounds.playAt(this, ModSounds.DROP_METAL, 0.5F, 0.85F);
         }
     }
 
@@ -200,7 +199,7 @@ public class CajaEntity extends BaseEntity {
             this.level().addFreshEntity(itemEntity);
         }
 
-        this.level().playSound(null, this.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.BLOCKS, 0.8F, 0.6F);
+        ModSounds.playAt(this, ModSounds.ITEMS_SPILL, 0.85F, 1.0F);
     }
 
     private void spawnSpecialEntity() {

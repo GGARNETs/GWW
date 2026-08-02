@@ -7,12 +7,11 @@ import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
 import com.github.razorplay01.entity.custom.util.SelfHealingHitboxes;
 import com.github.razorplay01.item.ModItems;
+import com.github.razorplay01.sound.ModSounds;
 import lombok.Getter;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.InteractionHand;
@@ -277,10 +276,17 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
     }
 
     private void reevaluatePuzzle(int puzzleId) {
+        boolean bothWereSolved = areBothPuzzlesSolved();
         boolean allFilled = areAllSlotsFilled(puzzleId);
         boolean solved = allFilled && (puzzleId == 1 ? checkPuzzle1() : checkPuzzle2());
         entityData.set(puzzleId == 1 ? PUZZLE_1_SOLVED : PUZZLE_2_SOLVED, solved);
         updateLinkedTurtles(puzzleId, solved ? 2 : (allFilled ? 1 : 0));
+
+        // El circuito solo canta cuando cierran las dos mitades: es el aviso de que
+        // el panel entero está resuelto, no de que un hueco quedó bien.
+        if (!bothWereSolved && areBothPuzzlesSolved()) {
+            ModSounds.playAt(this, ModSounds.CIRCUIT_COMPLETE, 1.0F, 1.0F);
+        }
     }
 
     /**
@@ -288,9 +294,7 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
      * el resultado del puzzle se lee en las luces del panel, no en el chat.
      */
     private void playFuseSound(boolean inserting) {
-        this.level().playSound(null, this.blockPosition(),
-                inserting ? SoundEvents.LEVER_CLICK : SoundEvents.WOODEN_BUTTON_CLICK_OFF,
-                SoundSource.BLOCKS, 0.6F, inserting ? 1.2F : 0.8F);
+        ModSounds.playAt(this, inserting ? ModSounds.FUSE_INSERT : ModSounds.FUSE_REMOVE, 0.8F, 1.0F);
     }
 
     public int getLinkedCount(int puzzleId) {

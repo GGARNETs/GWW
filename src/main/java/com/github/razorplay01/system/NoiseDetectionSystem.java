@@ -5,12 +5,14 @@ import com.github.razorplay01.api.noise.NoiseAPI;
 import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.network.FabricCustomPayload;
 import com.github.razorplay01.network.packet.NoisePacket;
+import com.github.razorplay01.sound.ModSounds;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -21,13 +23,20 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class NoiseDetectionSystem {
 
     private static final Map<UUID, PlayerNoiseData> PLAYER_NOISE_DATA = new HashMap<>();
     private static final Map<UUID, UUID> PLAYER_GROUPS = new HashMap<>(); // player -> groupLeader
+
+    /** Fracción de barra a la que salta el aviso sonoro, y a la que se rearma. */
+    private static final float ALERT_THRESHOLD = 0.85f;
+    private static final float ALERT_RESET = 0.6f;
+    private static final Set<UUID> alertedGroups = new HashSet<>();
 
     /**
      * Valores que no son configurables desde settings.yml. Los que sí lo son
@@ -113,7 +122,38 @@ public class NoiseDetectionSystem {
         data.setCurrentNoise(newNoise);
         data.setLastNoiseTime(System.currentTimeMillis());
 
+        checkNoiseAlert(leaderId, asBarFraction(newNoise));
         syncGroupToClients(leaderId);
+    }
+
+    /**
+     * Aviso sonoro cuando la barra del grupo se acerca al tope. Suena una sola vez por
+     * subida: hasta que el ruido no baja del umbral de rearme no vuelve a avisar, o
+     * cada paso encima de la línea dispararía el sonido.
+     */
+    private static void checkNoiseAlert(UUID leaderId, float fraction) {
+        if (fraction >= ALERT_THRESHOLD) {
+            if (alertedGroups.add(leaderId)) {
+                playToGroup(leaderId, ModSounds.NOISE_ALERT);
+            }
+        } else if (fraction < ALERT_RESET) {
+            alertedGroups.remove(leaderId);
+        }
+    }
+
+    private static void playToGroup(UUID leaderId, SoundEvent sound) {
+        for (Map.Entry<UUID, UUID> entry : PLAYER_GROUPS.entrySet()) {
+            if (entry.getValue().equals(leaderId)) {
+                ServerPlayer member = getPlayerByUUID(entry.getKey());
+                if (member != null) {
+                    member.playNotifySound(sound, SoundSource.AMBIENT, 0.9f, 1.0f);
+                }
+            }
+        }
+        ServerPlayer leader = getPlayerByUUID(leaderId);
+        if (leader != null) {
+            leader.playNotifySound(sound, SoundSource.AMBIENT, 0.9f, 1.0f);
+        }
     }
 
     public static void tick(ServerPlayer player) {
@@ -150,6 +190,9 @@ public class NoiseDetectionSystem {
         PlayerNoiseData data = getPlayerData(leaderId);
         if (data.getCurrentNoise() > 0) {
             data.setCurrentNoise(Math.max(0, data.getCurrentNoise() - GwwSettings.noiseDecayPerTick()));
+            if (!alertedGroups.isEmpty() && asBarFraction(data.getCurrentNoise()) < ALERT_RESET) {
+                alertedGroups.remove(leaderId);
+            }
         }
     }
 
@@ -417,10 +460,12 @@ public class NoiseDetectionSystem {
     public static void removePlayer(UUID playerId) {
         PLAYER_NOISE_DATA.remove(playerId);
         PLAYER_GROUPS.remove(playerId);
+        alertedGroups.remove(playerId);
     }
 
     public static void clearAll() {
         PLAYER_NOISE_DATA.clear();
         PLAYER_GROUPS.clear();
+        alertedGroups.clear();
     }
 }

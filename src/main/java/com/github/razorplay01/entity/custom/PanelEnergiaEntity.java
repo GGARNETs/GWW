@@ -4,6 +4,7 @@ import com.github.razorplay01.arena.Arena;
 import com.github.razorplay01.arena.ArenaLight;
 import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.item.ModItems;
+import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -96,6 +97,13 @@ public class PanelEnergiaEntity extends BaseEntity {
     private void cutArenaLight() {
         if (this.level().isClientSide) return;
 
+        // tickCount == 0 es la carga del chunk: el estado viene del NBT y la sala ya
+        // estaba a oscuras, así que el apagón no se vuelve a oír.
+        if (this.tickCount > 0) {
+            ModSounds.playAt(this, ModSounds.POWER_DOWN, 1.0F, 1.0F);
+            ModSounds.playAt(this, ModSounds.LIGHT_OFF, 0.9F, 1.0F);
+        }
+
         Arena arena = ArenaManager.getArenaAt(this.position());
         if (arena != null) {
             ArenaLight.refresh(this.level(), arena, false);
@@ -165,19 +173,24 @@ public class PanelEnergiaEntity extends BaseEntity {
             if (!isOpen()) {
                 if (hasRequiredItem(player, new ItemStack(ModItems.GANZUA))) {
                     consumeRequiredItem(player, new ItemStack(ModItems.GANZUA));
+                    ModSounds.playAt(this, ModSounds.LOCK_PICK, 0.8F, 1.0F);
+                    ModSounds.playAt(this, ModSounds.LOCK_OPEN, 0.85F, 1.0F);
                     setOpen(true);
                     player.sendSystemMessage(Component.literal("§a¡Has abierto el panel eléctrico!"));
                 } else {
+                    ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 1.0F);
                     player.sendSystemMessage(Component.literal("§cNecesitas un §bobjeto §cpara abrir el panel eléctrico"));
                 }
             } else {
                 if (!isActive()) {
                     if (hasRequiredItem(player, new ItemStack(ModItems.ALICATE_CORTACABLES))) {
                         consumeRequiredItem(player, new ItemStack(ModItems.ALICATE_CORTACABLES));
+                        ModSounds.playAt(this, ModSounds.CABLE_CUT, 1.0F, 1.0F);
                         setActive(true);
                         NoiseDetectionSystem.addNoise(player, 0.5f);
                         player.sendSystemMessage(Component.literal("§a¡Has cortado los cables!"));
                     } else {
+                        ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 1.0F);
                         player.sendSystemMessage(Component.literal("§cNecesitas un §bobjeto §cpara interactuar con el panel eléctrico"));
                     }
                 }

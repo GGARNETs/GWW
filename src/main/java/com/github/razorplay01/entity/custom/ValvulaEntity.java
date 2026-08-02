@@ -2,7 +2,9 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.entity.custom.util.ValvulaType;
+import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -50,6 +52,14 @@ public class ValvulaEntity extends BaseEntity {
     private static final int PARTICLE_INTERVAL = 2;
     private static final int DIRECTION_EXPIRE_TICKS = 10;
     private static final int NEARBY_REFRESH_INTERVAL = 5;
+
+    /**
+     * Cada cuántos ticks se relanza el siseo del vapor. El .ogg dura 2,25 s y esto son
+     * 2,1 s: el solape mínimo evita cortes y el bucle se oye continuo. No se puede
+     * bajar mucho más sin repetir la muestra encima de sí misma.
+     */
+    private static final int GAS_SOUND_INTERVAL = 42;
+    private int gasSoundCooldown = 0;
 
     private List<Player> cachedNearbyPlayers = List.of();
     private int nearbyRefreshCooldown = 0;
@@ -285,6 +295,7 @@ public class ValvulaEntity extends BaseEntity {
         if (!areParticlesActive()) {
             playerEntryDirections.clear();
             playerLastSeenTick.clear();
+            gasSoundCooldown = 0;
             return;
         }
 
@@ -305,8 +316,26 @@ public class ValvulaEntity extends BaseEntity {
             spawnAllParticles();
         }
 
+        if (--gasSoundCooldown <= 0) {
+            gasSoundCooldown = GAS_SOUND_INTERVAL;
+            playGasLoop();
+        }
+
         pushNearbyPlayers();
         cleanupExpiredEntries();
+    }
+
+    /**
+     * Siseo del vapor en cada boquilla. Cuelga de la misma condición que las
+     * partículas (válvula sin resolver Y alguien cerca), así que una sala vacía no
+     * manda ni un paquete: es un sonido cada 2 s por emisor, no un trabajo por tick.
+     */
+    private void playGasLoop() {
+        for (ParticleEmitter emitter : particleEmitters) {
+            Vec3 pos = emitter.getWorldPosition(this);
+            ModSounds.playAmbient(this.level(), BlockPos.containing(pos),
+                    ModSounds.GAS_LEAK, 0.55F, 0.95F + this.random.nextFloat() * 0.1F);
+        }
     }
 
     private void refreshNearbyPlayers() {
@@ -487,16 +516,19 @@ public class ValvulaEntity extends BaseEntity {
         }
 
         if (!hasManivela()) {
+            ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 1.05F);
             actionBar(player, "§cLa válvula no tiene manivela: no puedes girarla.");
             return;
         }
 
         int next = getState() + delta;
         if (next < MIN_STATE) {
+            ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 0.9F);
             actionBar(player, "§cLa válvula ya está cerrada del todo.");
             return;
         }
         if (next > MAX_STATE) {
+            ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 0.9F);
             actionBar(player, "§cLa válvula ya está abierta del todo.");
             return;
         }
@@ -507,6 +539,10 @@ public class ValvulaEntity extends BaseEntity {
         } else {
             triggerTurnDownAnim(this.level());
         }
+        // Todos los giros suenan exactamente igual, a propósito: el oído no puede
+        // delatar ni la dirección ni el punto correcto. Dar con la posición buena es
+        // el puzzle, y se averigua por el vapor, no por el sonido.
+        ModSounds.playAt(this, ModSounds.VALVE_TURN, 0.8F, 1.0F);
         NoiseDetectionSystem.addNoise(player, 0.5f);
 
         // Si al ajustar la presión esta válvula quedó en su sitio, las rejas a medio

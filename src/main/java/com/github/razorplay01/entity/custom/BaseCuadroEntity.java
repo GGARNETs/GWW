@@ -3,6 +3,8 @@ package com.github.razorplay01.entity.custom;
 import com.github.razorplay01.entity.BaseInteractiveEntity;
 import com.github.razorplay01.entity.custom.util.EscapeRoomPersistable;
 import com.github.razorplay01.item.ModItems;
+import com.github.razorplay01.sound.ModSounds;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -184,10 +186,27 @@ public abstract class BaseCuadroEntity extends BaseInteractiveEntity implements 
         return normalizeAngle(this.getYRot() - getInitialYaw());
     }
 
+    /** El cuadro es madera y cuerda: roza contra la pared, no suena a metal. */
+    @Override
+    protected SoundEvent getGrabSound() {
+        return ModSounds.PAINTING_SLIDE;
+    }
+
+    @Override
+    protected SoundEvent getReleaseSound() {
+        return ModSounds.PAINTING_SET;
+    }
+
+    @Override
+    protected SoundEvent getLandSound() {
+        return ModSounds.PAINTING_SET;
+    }
+
     protected void spawnRewardItem() {
         if (!this.level().isClientSide) {
             ItemStack reward = new ItemStack(ModItems.COLGANTE_CUADROS, 1);
             if (reward != null && !reward.isEmpty()) {
+                ModSounds.playAt(this, ModSounds.PENDANT_FALL, 0.8F, 1.0F);
                 Vec3 spawnPos = this.position().add(0, 3, 0);
                 ItemEntity itemEntity = new ItemEntity(
                         this.level(),
@@ -203,6 +222,7 @@ public abstract class BaseCuadroEntity extends BaseInteractiveEntity implements 
     }
 
     protected void onPuzzleSolved() {
+        ModSounds.playAt(this, ModSounds.PAINTING_SET, 0.9F, 1.0F);
     }
 
     protected void onPuzzleUnsolved() {

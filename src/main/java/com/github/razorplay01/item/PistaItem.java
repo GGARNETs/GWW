@@ -1,8 +1,10 @@
 package com.github.razorplay01.item;
 
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
@@ -27,6 +29,10 @@ public class PistaItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         if (!level.isClientSide && hand == InteractionHand.MAIN_HAND) {
             ItemStack stack = player.getItemInHand(hand);
+
+            // El papel suena siempre, haya comando o no: es el gesto de desplegar la hoja.
+            level.playSound(null, player.blockPosition(), ModSounds.PAPER_OPEN,
+                    SoundSource.PLAYERS, 0.8F, 0.95F + level.random.nextFloat() * 0.1F);
 
             String command = stack.get(ModComponents.PISTA_COMMAND);
 

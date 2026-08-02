@@ -1,5 +1,6 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
@@ -52,6 +53,8 @@ public class CannonEntity extends PathfinderMob implements GeoEntity {
     public void triggerShootAnim(Level level) {
         if (level instanceof ServerLevel) {
             triggerAnim("shoot_controller", "shoot");
+            ModSounds.playAt(this, ModSounds.CANNON_FIRE, 1.0F,
+                    0.95F + this.random.nextFloat() * 0.1F);
         }
     }
 

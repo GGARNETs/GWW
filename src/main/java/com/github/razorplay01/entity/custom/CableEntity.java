@@ -1,6 +1,7 @@
 package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.item.ModItems;
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -41,14 +42,17 @@ public class CableEntity extends BaseEntity {
         if (isActive()) {
             int nextState = (this.getState() + 1) % 4;
             this.setState(nextState);
+            ModSounds.playAt(this, ModSounds.CABLE_ROTATE, 0.7F, 1.0F);
         } else {
             if (getCableType() == 0 && player.getInventory().contains(new ItemStack(ModItems.CABLE_LINEAL))) {
                 consumeRequiredItem(player, ModItems.CABLE_LINEAL);
                 setActive(true);
+                ModSounds.playAt(this, ModSounds.CABLE_PLUG, 0.9F, 1.0F);
             }
             if (getCableType() == 1 && player.getInventory().contains(new ItemStack(ModItems.CABLE_CURVO))) {
                 consumeRequiredItem(player, ModItems.CABLE_CURVO);
                 setActive(true);
+                ModSounds.playAt(this, ModSounds.CABLE_PLUG, 0.9F, 1.0F);
             }
         }
     }

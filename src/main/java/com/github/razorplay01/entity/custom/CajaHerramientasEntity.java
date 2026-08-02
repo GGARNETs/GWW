@@ -1,6 +1,7 @@
 package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.item.ModItems;
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -9,8 +10,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -59,9 +58,7 @@ public class CajaHerramientasEntity extends BaseEntity {
         this.entityData.set(IS_OPEN, open);
         if (open && !this.level().isClientSide) {
             openAnimationTicks = 0;
-            this.level().playSound(null, this.blockPosition(),
-                    SoundEvents.CHEST_OPEN, SoundSource.BLOCKS,
-                    1.0F, 1.0F);
+            ModSounds.playAt(this, ModSounds.TOOLBOX_OPEN, 1.0F, 1.0F);
         }
     }
 
@@ -122,9 +119,12 @@ public class CajaHerramientasEntity extends BaseEntity {
             if (!isOpen()) {
                 if (hasRequiredItem(player)) {
                     consumeRequiredItem(player);
+                    ModSounds.playAt(this, ModSounds.LOCK_PICK, 0.8F, 1.05F);
+                    ModSounds.playAt(this, ModSounds.LOCK_OPEN, 0.85F, 1.1F);
                     setOpen(true);
                     player.sendSystemMessage(Component.literal("§a¡Has abierto la caja de herramientas!"));
                 } else {
+                    ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 1.1F);
                     player.sendSystemMessage(Component.literal("§cNecesitas una §bganzúa §cpara abrir esta caja"));
                 }
             } else {
@@ -179,9 +179,7 @@ public class CajaHerramientasEntity extends BaseEntity {
             this.level().addFreshEntity(itemEntity);
         }
 
-        this.level().playSound(null, this.blockPosition(),
-                SoundEvents.ITEM_PICKUP, SoundSource.BLOCKS,
-                0.8F, 0.6F);
+        ModSounds.playAt(this, ModSounds.ITEMS_SPILL, 0.85F, 1.05F);
     }
 
     public void reset() {
