@@ -1,7 +1,9 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.darkpred.morehitboxes.MultiPartLevel;
 import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.darkpred.morehitboxes.api.MultiPartEntity;
+import com.github.razorplay01.entity.custom.util.NearbyPlayers;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
@@ -16,6 +18,8 @@ import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.util.GeckoLibUtil;
+
+import java.util.List;
 
 public abstract class BaseEntity extends PathfinderMob implements GeoEntity {
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
@@ -51,14 +55,72 @@ public abstract class BaseEntity extends PathfinderMob implements GeoEntity {
     public void aiStep() {
         if (!this.level().isClientSide) {
             if (this instanceof MultiPartEntity<?> multiPart) {
-                for (MultiPart<?> part : multiPart.getEntityHitboxData().getCustomParts()) {
-                    part.updatePosition();
+                tickHitboxActivation(multiPart);
+                if (hitboxesRegistered) {
+                    for (MultiPart<?> part : multiPart.getEntityHitboxData().getCustomParts()) {
+                        part.updatePosition();
+                    }
+                    multiPart.getEntityHitboxData().getAnchorData().updatePositions();
                 }
-                multiPart.getEntityHitboxData().getAnchorData().updatePositions();
             }
             return;
         }
         super.aiStep();
+    }
+
+    /**
+     * Radio a partir del cual las sub-hitboxes de esta entidad dejan de existir para el
+     * servidor. Muy holgado a propósito: el alcance de clic son 5 bloques, así que 48
+     * deja margen de sobra para que nadie llegue nunca a un panel "apagado".
+     */
+    private static final double HITBOX_ACTIVE_RADIUS = 48.0;
+    /** Cada cuánto se revisa. Un segundo contra 48 bloques de margen: imposible colarse. */
+    private static final int HITBOX_CHECK_INTERVAL = 20;
+
+    private boolean hitboxesRegistered = true;
+
+    /**
+     * Da de alta o de baja las sub-hitboxes de esta entidad en el nivel según haya
+     * alguien cerca. Es el arreglo del cuello de botella de morehitboxes.
+     * <p>
+     * morehitboxes guarda TODAS las sub-hitboxes del servidor en una única lista plana,
+     * sin índice espacial, y la recorre entera en CADA consulta de entidades del
+     * servidor — las nuestras, las de vanilla (colisiones de los 100 jugadores) y las de
+     * cualquier otro mod. Con el mapa entero cargado son ~20.000 entradas (escalera 3 +
+     * panel de código 5 + panel de fusibles 6, por sala), y encima el barrido hace un
+     * {@code contains} lineal por candidato: ahí se iba la mitad del tick.
+     * <p>
+     * Las salas sin nadie dentro no necesitan hitboxes clicables, así que se dan de baja
+     * y la lista global cae a lo que de verdad está en uso. De paso se ahorra el
+     * {@code updatePosition} por parte y por tick, que con esas 20.000 partes tampoco
+     * era gratis.
+     * <p>
+     * El alta/baja es idempotente (morehitboxes indexa por id de entidad), así que
+     * convive sin problema con el registro que hace la librería al cargar el chunk y con
+     * {@link com.github.razorplay01.entity.custom.util.MultiPartHitboxes#registerParts}.
+     */
+    private void tickHitboxActivation(MultiPartEntity<?> multiPart) {
+        if ((this.tickCount + this.getId()) % HITBOX_CHECK_INTERVAL != 0) {
+            return;
+        }
+        boolean shouldBeActive = NearbyPlayers.anyWithin(this, HITBOX_ACTIVE_RADIUS);
+        if (shouldBeActive == hitboxesRegistered) {
+            return;
+        }
+        List<? extends MultiPart<?>> parts = multiPart.getEntityHitboxData().getCustomParts();
+        if (parts == null || parts.isEmpty() || !(this.level() instanceof MultiPartLevel multiPartLevel)) {
+            // Sin parts todavía no hay nada que dar de alta; dejar el flag como está para
+            // no quedarnos creyendo que las dimos de baja cuando aparezcan más tarde.
+            return;
+        }
+        for (MultiPart<?> part : parts) {
+            if (shouldBeActive) {
+                multiPartLevel.moreHitboxes$addMultiPart(part);
+            } else {
+                multiPartLevel.moreHitboxes$removeMultiPart(part);
+            }
+        }
+        hitboxesRegistered = shouldBeActive;
     }
 
     /**

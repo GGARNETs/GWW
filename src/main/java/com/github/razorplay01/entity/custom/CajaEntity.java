@@ -2,6 +2,7 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.GWW;
 import com.github.razorplay01.entity.ModEntities;
+import com.github.razorplay01.entity.custom.util.NearbyPlayers;
 import com.github.razorplay01.item.ModItems;
 import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
@@ -49,10 +50,11 @@ public class CajaEntity extends BaseEntity {
 
     private boolean itemsSpawned = false;
     private int openAnimationTicks = 0;
-    private int collisionCheckCooldown = 0;
 
     private static final int SPAWN_DELAY = 10;
     private static final int COLLISION_CHECK_INTERVAL = 5;
+    /** Sin nadie a esta distancia nadie puede estar moviendo la palanca que abre la caja. */
+    private static final double ACTIVE_RADIUS = 32.0;
 
     public CajaEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -122,12 +124,14 @@ public class CajaEntity extends BaseEntity {
             }
         }
 
-        if (!isOpen()) {
-            collisionCheckCooldown--;
-            if (collisionCheckCooldown <= 0) {
-                collisionCheckCooldown = COLLISION_CHECK_INTERVAL;
-                checkForInteractiveEntityCollision();
-            }
+        // La palanca que abre la caja solo llega hasta aquí si hay alguien moviéndola:
+        // sin nadie en la sala esta consulta no puede dar nunca positivo. El turno va por
+        // id de entidad porque con un contador propio las ~1400 cajas del mapa arrancaban
+        // todas en cero y barrían el mismo tick.
+        if (!isOpen()
+                && (this.tickCount + this.getId()) % COLLISION_CHECK_INTERVAL == 0
+                && NearbyPlayers.anyWithin(this, ACTIVE_RADIUS)) {
+            checkForInteractiveEntityCollision();
         }
     }
 
@@ -239,7 +243,6 @@ public class CajaEntity extends BaseEntity {
         setOpen(false);
         itemsSpawned = false;
         openAnimationTicks = 0;
-        collisionCheckCooldown = 0;
     }
 
     public void forceOpen() {

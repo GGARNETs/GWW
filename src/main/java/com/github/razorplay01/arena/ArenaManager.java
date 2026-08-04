@@ -5,6 +5,7 @@ import com.github.razorplay01.system.NoiseDetectionSystem;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Mth;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -147,6 +148,8 @@ public class ArenaManager {
         } catch (Exception e) {
             errors.add("Error leyendo config.yml: " + e.getMessage());
             GWW.LOGGER.error("[GWW] Error leyendo config.yml", e);
+        } finally {
+            rebuildSpatialIndex();
         }
         return errors;
     }
@@ -204,6 +207,7 @@ public class ArenaManager {
      */
     public static synchronized void addOrUpdate(Arena arena) throws IOException {
         ARENAS.put(arena.getId(), arena);
+        rebuildSpatialIndex();
         save();
     }
 
@@ -214,6 +218,7 @@ public class ArenaManager {
         if (ARENAS.remove(id) == null) {
             return false;
         }
+        rebuildSpatialIndex();
         save();
         return true;
     }
@@ -258,8 +263,50 @@ public class ArenaManager {
         return ARENAS.keySet();
     }
 
-    public static Arena getArenaAt(Vec3 pos) {
+    /**
+     * Celdas de 256 bloques. Las salas del mapa están separadas ~230 bloques, así que
+     * cada arena cae en una o dos celdas y la búsqueda queda en un par de comparaciones.
+     */
+    private static final int CELL_SHIFT = 8;
+    private static final Map<Long, List<Arena>> SPATIAL_INDEX = new HashMap<>();
+
+    private static long cellKey(int cellX, int cellZ) {
+        return ((long) cellX << 32) | (cellZ & 0xFFFFFFFFL);
+    }
+
+    /**
+     * Reconstruye el índice espacial. Hay que llamarlo tras cualquier cambio en ARENAS.
+     */
+    private static void rebuildSpatialIndex() {
+        SPATIAL_INDEX.clear();
         for (Arena arena : ARENAS.values()) {
+            AABB box = arena.getZoneAABB();
+            int minX = Mth.floor(box.minX) >> CELL_SHIFT;
+            int maxX = Mth.floor(box.maxX) >> CELL_SHIFT;
+            int minZ = Mth.floor(box.minZ) >> CELL_SHIFT;
+            int maxZ = Mth.floor(box.maxZ) >> CELL_SHIFT;
+            for (int cellX = minX; cellX <= maxX; cellX++) {
+                for (int cellZ = minZ; cellZ <= maxZ; cellZ++) {
+                    SPATIAL_INDEX.computeIfAbsent(cellKey(cellX, cellZ), k -> new ArrayList<>()).add(arena);
+                }
+            }
+        }
+    }
+
+    /**
+     * Arena que contiene esa posición, o null.
+     * <p>
+     * Va por índice espacial y no recorriendo el mapa entero porque los Ublablas
+     * preguntan esto en CADA tick: con un mapa de cientos de salas y un Ublabla por
+     * sala, el barrido lineal era cuadrático y se comía el tick él solo.
+     */
+    public static Arena getArenaAt(Vec3 pos) {
+        List<Arena> candidates = SPATIAL_INDEX.get(
+                cellKey(Mth.floor(pos.x) >> CELL_SHIFT, Mth.floor(pos.z) >> CELL_SHIFT));
+        if (candidates == null) {
+            return null;
+        }
+        for (Arena arena : candidates) {
             if (arena.contains(pos)) {
                 return arena;
             }

@@ -6,6 +6,7 @@ import com.github.darkpred.morehitboxes.api.GeckoLibMultiPartEntity;
 import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.razorplay01.entity.BaseInteractiveEntity;
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
+import com.github.razorplay01.entity.custom.util.NearbyPlayers;
 import com.github.razorplay01.entity.custom.util.SelfHealingHitboxes;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -80,15 +81,24 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
     }
 
     private static final int NEARBY_REFRESH_INTERVAL = 5;
+    /** Sin nadie a la vista no hace falta mirar cada 5 ticks: un segundo sobra. */
+    private static final int IDLE_REFRESH_INTERVAL = 20;
+    private static final double NEARBY_RADIUS = 6.0;
     private List<Player> cachedNearbyPlayers = List.of();
-    private int nearbyRefreshCooldown = 0;
 
     /**
      * Simula colisión sólida con los escalones.
      * El jugador NO sube automáticamente - debe saltar.
-     * La consulta de jugadores era lo caro con una escalera por sala barriendo cada
-     * tick: la lista se refresca cada 5 ticks (con margen extra de radio) y la
-     * colisión en sí se sigue simulando por tick con las posiciones al día.
+     * <p>
+     * La lista de jugadores se refresca a intervalos y la colisión se sigue simulando
+     * por tick con las posiciones al día. Dos cosas importan aquí con 50 salas:
+     * <ul>
+     *   <li>La búsqueda va por {@link NearbyPlayers}, no por {@code getEntitiesOfClass}:
+     *       esa consulta arrastraba el barrido global de sub-hitboxes de morehitboxes.</li>
+     *   <li>El turno depende del id de la entidad. Con un contador propio todas las
+     *       escaleras arrancaban en cero y preguntaban EL MISMO tick — mil escaleras
+     *       barriendo veinte mil hitboxes a la vez es lo que disparaba el watchdog.</li>
+     * </ul>
      */
     private void handleSolidStepCollisions() {
         List<MultiPart<EscaleraEntity>> parts = this.hitboxData.getCustomParts();
@@ -97,14 +107,15 @@ public class EscaleraEntity extends BaseInteractiveEntity implements GeckoLibMul
             return;
         }
 
-        if (--nearbyRefreshCooldown <= 0) {
-            nearbyRefreshCooldown = NEARBY_REFRESH_INTERVAL;
-            cachedNearbyPlayers = this.level().getEntitiesOfClass(Player.class,
-                    this.getBoundingBox().inflate(6.0));
+        int interval = cachedNearbyPlayers.isEmpty() ? IDLE_REFRESH_INTERVAL : NEARBY_REFRESH_INTERVAL;
+        if ((this.tickCount + this.getId()) % interval == 0) {
+            cachedNearbyPlayers = NearbyPlayers.within(this, this.getBoundingBox().inflate(NEARBY_RADIUS));
         }
 
         for (Player player : cachedNearbyPlayers) {
-            if (player.isRemoved()) continue;
+            // El espectador no se choca con nada: sin esto la escalera lo reposicionaba
+            // y le cortaba el vuelo al atravesarla.
+            if (player.isRemoved() || player.isSpectator()) continue;
             handlePlayerSolidCollision(player, parts);
         }
     }

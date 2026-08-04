@@ -1,6 +1,7 @@
 package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.arena.ArenaManager;
+import com.github.razorplay01.entity.custom.util.NearbyPlayers;
 import com.github.razorplay01.entity.custom.util.ValvulaType;
 import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
@@ -52,6 +53,8 @@ public class ValvulaEntity extends BaseEntity {
     private static final int PARTICLE_INTERVAL = 2;
     private static final int DIRECTION_EXPIRE_TICKS = 10;
     private static final int NEARBY_REFRESH_INTERVAL = 5;
+    /** Sin nadie a la vista no hace falta mirar cada 5 ticks: un segundo sobra. */
+    private static final int IDLE_REFRESH_INTERVAL = 20;
 
     /**
      * Cada cuántos ticks se relanza el siseo del vapor. El .ogg dura 2,25 s y esto son
@@ -62,7 +65,6 @@ public class ValvulaEntity extends BaseEntity {
     private int gasSoundCooldown = 0;
 
     private List<Player> cachedNearbyPlayers = List.of();
-    private int nearbyRefreshCooldown = 0;
 
     /**
      * Margen para avisar a las rejas cuando la válvula no está dentro de ninguna arena
@@ -300,10 +302,10 @@ public class ValvulaEntity extends BaseEntity {
         }
 
         // Una válvula sin resolver echa vapor para siempre; con nadie cerca no hay
-        // que emitir partículas ni empujar. La lista de jugadores se refresca cada
-        // 5 ticks: la consulta de entidades por tick era lo caro, no el empuje.
-        if (--nearbyRefreshCooldown <= 0) {
-            nearbyRefreshCooldown = NEARBY_REFRESH_INTERVAL;
+        // que emitir partículas ni empujar. El turno de refresco va por id de entidad:
+        // con un contador propio las 1400 válvulas del mapa preguntaban el mismo tick.
+        int interval = cachedNearbyPlayers.isEmpty() ? IDLE_REFRESH_INTERVAL : NEARBY_REFRESH_INTERVAL;
+        if ((this.tickCount + this.getId()) % interval == 0) {
             refreshNearbyPlayers();
         }
         if (cachedNearbyPlayers.isEmpty()) {
@@ -340,11 +342,11 @@ public class ValvulaEntity extends BaseEntity {
 
     private void refreshNearbyPlayers() {
         double maxRadius = getMaxEmitterRadius();
-        if (maxRadius <= 0 || !(this.level() instanceof ServerLevel serverLevel)) {
+        if (maxRadius <= 0 || this.level().isClientSide) {
             cachedNearbyPlayers = List.of();
             return;
         }
-        cachedNearbyPlayers = serverLevel.getEntitiesOfClass(Player.class,
+        cachedNearbyPlayers = NearbyPlayers.within(this,
                 this.getBoundingBox().inflate(maxRadius + 12));
     }
 

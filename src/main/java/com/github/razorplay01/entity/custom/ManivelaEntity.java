@@ -1,6 +1,7 @@
 package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.entity.BaseInteractiveEntity;
+import com.github.razorplay01.entity.custom.util.NearbyPlayers;
 import com.github.razorplay01.entity.custom.util.ValvulaType;
 import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.nbt.CompoundTag;
@@ -26,7 +27,8 @@ public class ManivelaEntity extends BaseInteractiveEntity {
 
     /** Cada cuántos ticks la manivela mira si la han dejado sobre su válvula. */
     private static final int VALVULA_CHECK_INTERVAL = 5;
-    private int valvulaCheckCounter = 0;
+    /** Sin nadie a esta distancia nadie puede estar colocando la manivela. */
+    private static final double ACTIVE_RADIUS = 32.0;
 
     public ManivelaEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -89,8 +91,12 @@ public class ManivelaEntity extends BaseInteractiveEntity {
         // Encajar la manivela es un evento único por partida, así que no hace falta
         // barrer válvulas en cada tick: cada cuarto de segundo es imperceptible al
         // colocarla y ahorra una consulta de entidades por manivela y por tick.
-        if (!this.level().isClientSide && ++valvulaCheckCounter >= VALVULA_CHECK_INTERVAL) {
-            valvulaCheckCounter = 0;
+        // La manivela solo se acerca a una válvula si alguien la lleva, así que la sala
+        // vacía no comprueba nada. Y el turno va por id: con un contador propio las
+        // ~1400 manivelas del mapa consultaban todas el mismo tick.
+        if (!this.level().isClientSide
+                && (this.tickCount + this.getId()) % VALVULA_CHECK_INTERVAL == 0
+                && NearbyPlayers.anyWithin(this, ACTIVE_RADIUS)) {
             this.level().getEntitiesOfClass(ValvulaEntity.class, this.getBoundingBox().inflate(0.5D))
                     .forEach(valvula -> {
                         if (valvula.getValType() == this.getValType() && !valvula.hasManivela()) {
