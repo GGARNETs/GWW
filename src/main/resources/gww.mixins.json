@@ -3,7 +3,8 @@
   "package": "com.github.razorplay01.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "ItemFrameMixin"
+    "ItemFrameMixin",
+    "SpectatorCameraFixMixin"
   ],
   "injectors": {
     "defaultRequire": 1
