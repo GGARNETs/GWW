@@ -134,7 +134,7 @@ public final class EscapeRoomController {
 
         Component title = Component.literal("¡ESCAPA!")
                 .withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
-        Component subtitle = Component.literal("Escapa por el ducto de ventilación en el sótano")
+        Component subtitle = Component.literal("Escapa por el ducto de ventilación en el ático")
                 .withStyle(ChatFormatting.YELLOW);
         for (ServerPlayer player : players) {
             player.connection.send(new ClientboundSetTitlesAnimationPacket(5, 100, 20)); // ~5 s
