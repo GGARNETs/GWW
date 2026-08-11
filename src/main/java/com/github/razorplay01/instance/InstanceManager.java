@@ -130,6 +130,11 @@ public class InstanceManager {
         return instance;
     }
 
+    /** Radio total que toca un paste: el capturado más el margen que se limpia alrededor. */
+    public static int pasteRadius(Instance instance) {
+        return instance.getRadius() + CLEAR_MARGIN;
+    }
+
     /** Borra las entidades de la sala alrededor de un punto. */
     public static void clear(ServerLevel level, BlockPos center, int radius) {
         level.getEntities((Entity) null, new AABB(center).inflate(radius), InstanceManager::isRoomEntity)

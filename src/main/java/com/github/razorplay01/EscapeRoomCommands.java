@@ -6,6 +6,7 @@ import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.arena.EscapeRoomController;
 import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.entity.custom.UblablaEntity;
+import com.github.razorplay01.instance.ChunkPreloader;
 import com.github.razorplay01.instance.Instance;
 import com.github.razorplay01.instance.InstanceManager;
 import com.mojang.brigadier.CommandDispatcher;
@@ -246,13 +247,16 @@ public class EscapeRoomCommands {
         CommandSourceStack source = context.getSource();
         BlockPos origin = BlockPos.containing(source.getPosition());
 
-        clipboard = InstanceManager.capture(source.getLevel(), origin, radius);
-
-        source.sendSuccess(() -> Component.literal(
-                "§aCapturadas §f" + clipboard.getEntities().size() + "§a entidades alrededor de "
-                        + origin.toShortString() + " §7(radio " + radius + ")\n"
-                        + "§7Guárdala con /escaperoom save <nombre>"
-        ), true);
+        // Con poca distancia de visión, el borde de un radio grande puede estar
+        // descargado y la captura saldría incompleta sin avisar.
+        ChunkPreloader.runWhenLoaded(source.getLevel(), origin, radius, () -> {
+            clipboard = InstanceManager.capture(source.getLevel(), origin, radius);
+            source.sendSuccess(() -> Component.literal(
+                    "§aCapturadas §f" + clipboard.getEntities().size() + "§a entidades alrededor de "
+                            + origin.toShortString() + " §7(radio " + radius + ")\n"
+                            + "§7Guárdala con /escaperoom save <nombre>"
+            ), true);
+        }, msg -> source.sendFailure(Component.literal("§c" + msg)));
         return 1;
     }
 
@@ -340,10 +344,7 @@ public class EscapeRoomCommands {
         }
 
         BlockPos target = BlockPos.containing(source.getPosition());
-        InstanceManager.paste(source.getLevel(), instance, target);
-
-        source.sendSuccess(() -> Component.literal(
-                "§aInstance '" + name + "' pegada en " + target.toShortString()), true);
+        pasteWhenLoaded(source, instance, name, target);
         return 1;
     }
 
@@ -357,11 +358,17 @@ public class EscapeRoomCommands {
         }
 
         BlockPos target = BlockPosArgument.getBlockPos(context, "pos");
-        InstanceManager.paste(source.getLevel(), instance, target);
-
-        source.sendSuccess(() -> Component.literal(
-                "§aInstance '" + name + "' pegada en " + target.toShortString()), true);
+        pasteWhenLoaded(source, instance, name, target);
         return 1;
+    }
+
+    /** Pega la instance cuando sus chunks estén cargados, para no dejar duplicados sin borrar. */
+    private static void pasteWhenLoaded(CommandSourceStack source, Instance instance, String name, BlockPos target) {
+        ChunkPreloader.runWhenLoaded(source.getLevel(), target, InstanceManager.pasteRadius(instance), () -> {
+            InstanceManager.paste(source.getLevel(), instance, target);
+            source.sendSuccess(() -> Component.literal(
+                    "§aInstance '" + name + "' pegada en " + target.toShortString()), true);
+        }, msg -> source.sendFailure(Component.literal("§c" + msg)));
     }
 
     private static int clear(CommandContext<CommandSourceStack> context) {
@@ -369,10 +376,7 @@ public class EscapeRoomCommands {
         CommandSourceStack source = context.getSource();
         BlockPos center = BlockPos.containing(source.getPosition());
 
-        InstanceManager.clear(source.getLevel(), center, radius);
-
-        source.sendSuccess(() -> Component.literal(
-                "§aÁrea limpiada en " + center.toShortString() + " §7(radio " + radius + ")"), true);
+        clearWhenLoaded(source, center, radius);
         return 1;
     }
 
@@ -381,11 +385,17 @@ public class EscapeRoomCommands {
         CommandSourceStack source = context.getSource();
         BlockPos center = BlockPosArgument.getBlockPos(context, "pos");
 
-        InstanceManager.clear(source.getLevel(), center, radius);
-
-        source.sendSuccess(() -> Component.literal(
-                "§aÁrea limpiada en " + center.toShortString() + " §7(radio " + radius + ")"), true);
+        clearWhenLoaded(source, center, radius);
         return 1;
+    }
+
+    /** Limpia el área cuando sus chunks estén cargados: si no, las entidades descargadas sobreviven. */
+    private static void clearWhenLoaded(CommandSourceStack source, BlockPos center, int radius) {
+        ChunkPreloader.runWhenLoaded(source.getLevel(), center, radius, () -> {
+            InstanceManager.clear(source.getLevel(), center, radius);
+            source.sendSuccess(() -> Component.literal(
+                    "§aÁrea limpiada en " + center.toShortString() + " §7(radio " + radius + ")"), true);
+        }, msg -> source.sendFailure(Component.literal("§c" + msg)));
     }
 
     private static int list(CommandContext<CommandSourceStack> context) {
@@ -631,6 +641,10 @@ public class EscapeRoomCommands {
     /**
      * Repega la instance de la arena en su origen. Devuelve false (avisando al
      * ejecutor) si la arena no tiene una instance guardada con la que montarse.
+     * <p>
+     * Con la sala descargada, el borrado previo del paste no veía las entidades
+     * viejas y cada reset dejaba una copia más: por eso todo el trabajo corre
+     * cuando el preloader confirma que los chunks están cargados con sus entidades.
      */
     private static boolean resetArena(Arena arena, CommandSourceStack source) {
         Instance instance = requireInstance(arena.getInstanceName(), source);
@@ -639,22 +653,24 @@ public class EscapeRoomCommands {
         }
 
         ServerLevel level = source.getLevel();
-        InstanceManager.paste(level, instance, arena.getOrigin());
+        ChunkPreloader.runWhenLoaded(level, arena.getOrigin(), InstanceManager.pasteRadius(instance), () -> {
+            InstanceManager.paste(level, instance, arena.getOrigin());
 
-        // La jaula es propia de la arena, no de la instance: se aplica al pegar.
-        if (arena.hasJail()) {
-            level.getEntitiesOfClass(UblablaEntity.class, arena.getZoneAABB(), u -> true)
-                    .forEach(u -> u.setJailArea(arena.getJailMin(), arena.getJailMax()));
-        }
+            // La jaula es propia de la arena, no de la instance: se aplica al pegar.
+            if (arena.hasJail()) {
+                level.getEntitiesOfClass(UblablaEntity.class, arena.getZoneAABB(), u -> true)
+                        .forEach(u -> u.setJailArea(arena.getJailMin(), arena.getJailMax()));
+            }
 
-        // El interruptor que se acaba de pegar trae el estado con el que se capturó
-        // (normalmente apagado), así que la luz se recalcula desde cero: si no, los
-        // jugadores que estuvieran dentro se quedarían con la visión nocturna puesta.
-        ArenaLight.refresh(level, arena, ArenaLight.isOn(level, arena));
+            // El interruptor que se acaba de pegar trae el estado con el que se capturó
+            // (normalmente apagado), así que la luz se recalcula desde cero: si no, los
+            // jugadores que estuvieran dentro se quedarían con la visión nocturna puesta.
+            ArenaLight.refresh(level, arena, ArenaLight.isOn(level, arena));
 
-        source.sendSuccess(() -> Component.literal(
-                "§aArena '" + arena.getId() + "' reseteada: " + instance.getEntities().size()
-                        + " entidades restauradas en " + arena.getOrigin().toShortString()), true);
+            source.sendSuccess(() -> Component.literal(
+                    "§aArena '" + arena.getId() + "' reseteada: " + instance.getEntities().size()
+                            + " entidades restauradas en " + arena.getOrigin().toShortString()), true);
+        }, msg -> source.sendFailure(Component.literal("§cArena '" + arena.getId() + "': " + msg)));
         return true;
     }
 

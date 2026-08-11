@@ -19,6 +19,7 @@ import com.github.razorplay01.extra.CannonArenaManager;
 import com.github.razorplay01.extra.ClientMinigameState;
 import com.github.razorplay01.extra.MinigameCommand;
 import com.github.razorplay01.extra.MinigameManager;
+import com.github.razorplay01.instance.ChunkPreloader;
 import com.github.razorplay01.instance.InstanceManager;
 import com.github.razorplay01.item.ModComponents;
 import com.github.razorplay01.item.ModItems;
@@ -62,6 +63,7 @@ public class GWW implements ModInitializer, ClientModInitializer {
             ArenaManager.tickGroups(server);
             EscapeRoomController.tick(server);
             MinigameManager.tick();
+            ChunkPreloader.tick();
         });
         // Morir jugando a los cañones no es una muerte de verdad: la partida
         // repone la vida y deja al jugador de espectador viendo a los demás.
@@ -123,7 +125,10 @@ public class GWW implements ModInitializer, ClientModInitializer {
         // Al apagar, cerrar las partidas: si no, los cañones y balas quedan guardados
         // en el mundo y reaparecen al arrancar de nuevo, ya sin nadie que los mueva.
         ServerLifecycleEvents.SERVER_STOPPING.register(minecraftServer -> MinigameManager.stopAll());
-        ServerLifecycleEvents.SERVER_STOPPED.register(minecraftServer -> server = null);
+        ServerLifecycleEvents.SERVER_STOPPED.register(minecraftServer -> {
+            server = null;
+            ChunkPreloader.reset();
+        });
         LOGGER.info("Hello Fabric world!");
     }
 
