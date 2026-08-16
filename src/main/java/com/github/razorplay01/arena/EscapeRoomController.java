@@ -1,5 +1,6 @@
 package com.github.razorplay01.arena;
 
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.PanelEnergiaEntity;
 import com.github.razorplay01.entity.custom.UblablaEntity;
 import com.github.razorplay01.entity.custom.ValvulaEntity;
@@ -38,12 +39,25 @@ import java.util.UUID;
  * La meta es independiente del resto: basta con que UN jugador (en survival o aventura)
  * entre en su zona para que ganen todos, sin importar si resolvieron algo. La única
  * condición es estar dentro del área de una arena.
+ * <p>
+ * Sobre el coste: la lista de jugadores se recorre UNA vez por ronda y cada jugador
+ * resuelve su arena por el índice espacial de {@link ArenaManager}. Antes era al revés
+ * —por cada arena se recorrían todos los jugadores del servidor— y con 50 salas y 100
+ * jugadores eso son 5.000 comprobaciones cada media vuelta, para nada: la inmensa
+ * mayoría de las salas no tienen a nadie dentro.
  */
 public final class EscapeRoomController {
     private EscapeRoomController() {
     }
 
     private static final int CHECK_INTERVAL = 10; // medio segundo
+    /**
+     * Cada cuántos ticks se mira si la sala cumple la condición de escape. Va mucho
+     * más espaciado que el resto porque son dos barridos de entidades de la zona, que
+     * con morehitboxes recorren la lista global de sub-hitboxes y son de lo más caro
+     * que puede hacer el mod. Dos segundos de retraso en un aviso no los nota nadie.
+     */
+    private static final int ESCAPE_SCAN_INTERVAL = 40;
     private static final int VICTORY_POINTS = 200;
 
     /** Arenas a las que ya se les lanzó el aviso de "¡ESCAPA!" en la ronda actual. */
@@ -52,12 +66,15 @@ public final class EscapeRoomController {
     private static final Set<String> won = new HashSet<>();
     /** Contornos de meta que se están mostrando temporalmente (por comando). */
     private static final Map<String, MetaPreview> previews = new HashMap<>();
+    /** Ticks que le faltan a cada arena para su próximo escaneo de condición de escape. */
+    private static final Map<String, Integer> escapeScanCooldown = new HashMap<>();
     private static int tickCounter = 0;
 
     /** Reinicia el estado de partida de una arena (al arrancarla de nuevo). */
     public static void onArenaStarted(String arenaId) {
         won.remove(arenaId);
         escapeAlerted.remove(arenaId);
+        escapeScanCooldown.remove(arenaId);
     }
 
     public static void showMetaPreview(ServerLevel level, String arenaId, AABB box, int durationTicks) {
@@ -71,37 +88,43 @@ public final class EscapeRoomController {
         tickCounter = 0;
 
         escapeAlerted.removeIf(id -> !ArenaManager.isRunning(id));
+        renderPreviews();
 
-        // Jugadores dentro de alguna arena en marcha: son los que llevan el impulso
-        // de velocidad al agacharse mientras dura la partida.
+        if (ArenaManager.getAll().isEmpty()) {
+            return;
+        }
+
+        // Un solo barrido: cada jugador cae en su arena por el índice espacial.
+        // Las salas vacías (que son casi todas) ni se tocan.
+        Map<String, List<ServerPlayer>> byArena = null;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!NoiseDetectionSystem.isEligible(player)) {
+                continue;
+            }
+            Arena arena = ArenaManager.getArenaAt(player.position());
+            if (arena == null) {
+                continue;
+            }
+            if (byArena == null) {
+                byArena = new HashMap<>();
+            }
+            byArena.computeIfAbsent(arena.getId(), k -> new ArrayList<>(4)).add(player);
+        }
+
         Set<UUID> playersInGame = new HashSet<>();
-        for (String id : List.copyOf(ArenaManager.getIds())) {
-            Arena arena = ArenaManager.get(id);
-            if (arena != null) {
-                processArena(server, arena, playersInGame);
+        if (byArena != null) {
+            for (Map.Entry<String, List<ServerPlayer>> entry : byArena.entrySet()) {
+                Arena arena = ArenaManager.get(entry.getKey());
+                if (arena != null) {
+                    processArena(arena, entry.getValue(), playersInGame);
+                }
             }
         }
         SneakSpeedSystem.sync(server, playersInGame);
-
-        renderPreviews();
     }
 
-    private static void processArena(MinecraftServer server, Arena arena, Set<UUID> playersInGame) {
-        AABB zone = arena.getZoneAABB();
-
-        // Jugadores que cuentan: los que están jugando (survival/aventura) dentro de la
-        // zona. De ellos sale también el nivel en el que mirar las entidades de la sala.
-        List<ServerPlayer> players = new ArrayList<>();
-        ServerLevel level = null;
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (NoiseDetectionSystem.isEligible(player) && zone.contains(player.position())) {
-                players.add(player);
-                level = player.serverLevel();
-            }
-        }
-        if (level == null) {
-            return; // nadie jugando en la zona
-        }
+    private static void processArena(Arena arena, List<ServerPlayer> players, Set<UUID> playersInGame) {
+        ServerLevel level = players.get(0).serverLevel();
 
         // El aviso de escape es parte del juego: solo con la partida en marcha.
         if (ArenaManager.isRunning(arena.getId())) {
@@ -119,7 +142,16 @@ public final class EscapeRoomController {
      * aviso de escape y se altera al Ublabla. Si la condición se deshace, se rearma.
      */
     private static void checkEscapeAlert(ServerLevel level, Arena arena, List<ServerPlayer> players) {
+        // El escaneo es caro: se hace a su propio ritmo, no en cada ronda.
+        int cooldown = escapeScanCooldown.getOrDefault(arena.getId(), 0) - CHECK_INTERVAL;
+        if (cooldown > 0) {
+            escapeScanCooldown.put(arena.getId(), cooldown);
+            return;
+        }
+        escapeScanCooldown.put(arena.getId(), ESCAPE_SCAN_INTERVAL);
+
         AABB zone = arena.getZoneAABB();
+        GwwDebug.count(GwwDebug.ENTITY_SCANS, 2);
         boolean cableCut = !level.getEntitiesOfClass(PanelEnergiaEntity.class, zone,
                 PanelEnergiaEntity::isActive).isEmpty();
         boolean escapeReady = cableCut && ValvulaEntity.allSolved(level, zone);
@@ -132,6 +164,9 @@ public final class EscapeRoomController {
             return; // ya avisado en esta racha
         }
 
+        GwwDebug.log(GwwDebug.Category.ARENA, "Arena {}: condición de escape cumplida, avisando a {} jugadores",
+                arena.getId(), players.size());
+
         Component title = Component.literal("¡ESCAPA!")
                 .withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
         Component subtitle = Component.literal("Escapa por el ducto de ventilación en el ático")
@@ -143,9 +178,11 @@ public final class EscapeRoomController {
             // El aviso de escape es el bicho, no una sirena: lo que se oye es al
             // Ublabla rugiendo, que es quien los tiene ahí encerrados.
             player.playNotifySound(ModSounds.UBLABLA_ROAR, SoundSource.MASTER, 1.0f, 1.0f);
+            GwwDebug.count(GwwDebug.PACKETS_MESSAGES, 3);
         }
 
         BlockPos target = players.get(0).blockPosition();
+        GwwDebug.count(GwwDebug.ENTITY_SCANS);
         level.getEntitiesOfClass(UblablaEntity.class, zone, u -> true)
                 .forEach(ublabla -> ublabla.alertTo(target));
     }
@@ -180,6 +217,8 @@ public final class EscapeRoomController {
         }
 
         won.add(arena.getId());
+        GwwDebug.log(GwwDebug.Category.ARENA, "Arena {}: victoria de {} jugadores",
+                arena.getId(), players.size());
 
         Component title = Component.literal("¡HAN ESCAPADO!")
                 .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD);
@@ -191,8 +230,10 @@ public final class EscapeRoomController {
             player.playNotifySound(ModSounds.VICTORY, SoundSource.MASTER, 1.0f, 1.0f);
             GeoWarePointsIntegration.award(player, VICTORY_POINTS);
             player.setGameMode(GameType.SPECTATOR);
+            GwwDebug.count(GwwDebug.PACKETS_MESSAGES, 3);
         }
 
+        GwwDebug.count(GwwDebug.ENTITY_SCANS);
         level.getEntitiesOfClass(UblablaEntity.class, arena.getZoneAABB(), u -> true)
                 .forEach(UblablaEntity::resetToPatrol);
 
@@ -204,6 +245,9 @@ public final class EscapeRoomController {
     // ==================== PREVISUALIZACIÓN DE LA META ====================
 
     private static void renderPreviews() {
+        if (previews.isEmpty()) {
+            return;
+        }
         previews.entrySet().removeIf(entry -> {
             MetaPreview preview = entry.getValue();
             drawBoxOutline(preview.level, preview.box);

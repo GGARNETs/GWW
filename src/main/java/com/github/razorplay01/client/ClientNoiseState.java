@@ -33,12 +33,22 @@ public class ClientNoiseState {
     }
 
     /**
-     * Interpolación suave del nivel de ruido
+     * Interpolación suave del nivel de ruido.
+     * <p>
+     * La bajada por silencio se calcula aquí, en el cliente: el ritmo de decay viene
+     * en el paquete y es constante, así que no hace falta que el servidor mande la
+     * barra cada pocos ticks solo para verla bajar. El servidor únicamente habla
+     * cuando pasa algo que el cliente no puede adivinar (una subida de ruido) y de
+     * vez en cuando para corregir la deriva.
      */
     public void tick() {
         if (!enabled) {
             currentNoiseLevel = 0;
             return;
+        }
+
+        if (targetNoiseLevel > 0 && decayRate > 0) {
+            targetNoiseLevel = Math.max(0.0f, targetNoiseLevel - decayRate);
         }
 
         // Interpolación suave hacia el target

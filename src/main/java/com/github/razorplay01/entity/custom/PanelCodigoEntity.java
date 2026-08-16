@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
+import com.github.razorplay01.entity.custom.util.NearbyPlayers;
 import com.github.razorplay01.entity.custom.util.SelfHealingHitboxes;
 import com.github.razorplay01.sound.ModSounds;
 
@@ -238,7 +239,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
                 setCurrentInput(new ArrayList<>());
                 lockTimer = 0;
                 ModSounds.playAt(this, ModSounds.PANEL_READY, 0.8F, 1.0F);
-                this.level().getEntitiesOfClass(Player.class, this.getBoundingBox().inflate(8.0))
+                NearbyPlayers.within(this, this.getBoundingBox().inflate(8.0))
                         .forEach(p -> p.displayClientMessage(
                                 Component.literal("§7El panel vuelve a estar operativo."), true));
             }

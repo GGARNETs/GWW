@@ -1,5 +1,6 @@
 package com.github.razorplay01.entity.custom.util;
 
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.*;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.Level;
@@ -40,6 +41,7 @@ public class PuzzleEntityChecker {
      */
     public static Optional<AnomalyResult> findFirstAnomaly(Level level, AABB area) {
         for (AnomalyChecker checker : CHECKERS) {
+            GwwDebug.count(GwwDebug.ENTITY_SCANS);
             AnomalyResult result = checker.check(level, area);
             if (result.found()) {
                 return Optional.of(result);

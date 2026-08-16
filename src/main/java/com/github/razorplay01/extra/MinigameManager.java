@@ -1,5 +1,6 @@
 package com.github.razorplay01.extra;
 
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.CannonBulletEntity;
 import com.github.razorplay01.entity.custom.CannonEntity;
 import net.minecraft.server.level.ServerLevel;
@@ -32,6 +33,8 @@ public class MinigameManager {
                              int totalShots, double bulletSpeed, float bulletDamage) {
         stop(arena.getId());
         ACTIVE.put(arena.getId(), new MinigameState(level, arena, durationSeconds, totalShots, bulletSpeed, bulletDamage));
+        GwwDebug.log(GwwDebug.Category.MINIGAME, "Arena {} arranca: {}s, {} disparos, vel {}, daño {}",
+                arena.getId(), durationSeconds, totalShots, bulletSpeed, bulletDamage);
     }
 
     /** Para la partida de una arena. Devuelve false si no había ninguna. */
@@ -39,6 +42,7 @@ public class MinigameManager {
         MinigameState game = ACTIVE.remove(arenaId);
         if (game == null) return false;
         game.endGame();
+        GwwDebug.log(GwwDebug.Category.MINIGAME, "Arena {} parada", arenaId);
         return true;
     }
 
@@ -50,6 +54,7 @@ public class MinigameManager {
      */
     public static int clearOrphans(ServerLevel level, CannonArena arena) {
         int removed = 0;
+        GwwDebug.count(GwwDebug.ENTITY_SCANS, 2);
         for (Entity entity : level.getEntitiesOfClass(CannonEntity.class, arena.getSearchBounds())) {
             entity.discard();
             removed++;

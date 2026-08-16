@@ -1,9 +1,9 @@
 package com.github.razorplay01.network;
 
 import com.github.razorplay.packet_handler.network.IPacket;
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.network.packet.MinigameStatePacket;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 import static com.github.razorplay01.GWW.LOGGER;
@@ -27,5 +27,6 @@ public class ServerNetworkManager {
 
     public static void sendMinigameStatePacketToPlayer(ServerPlayer player, MinigameStatePacket packet) {
         ServerPlayNetworking.send(player, new FabricCustomPayload(packet));
+        GwwDebug.count(GwwDebug.PACKETS_MINIGAME);
     }
 }

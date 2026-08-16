@@ -2,12 +2,14 @@ package com.github.razorplay01;
 
 import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.arena.EscapeRoomController;
-import com.github.razorplay01.cam.starup.AnnotationFinder;
+import com.github.razorplay01.cam.starup.CameraPluginLoader;
 import com.github.razorplay01.client.ClientNoiseState;
 import com.github.razorplay01.client.render.NoiseHudRenderer;
 import com.github.razorplay01.command.EscapeRoomConfigCommand;
+import com.github.razorplay01.command.GwwDebugCommand;
 import com.github.razorplay01.command.NoiseCommand;
 import com.github.razorplay01.config.GwwSettings;
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.ModEntities;
 import com.github.razorplay01.entity.attribute.ModAttributes;
 import com.github.razorplay01.entity.client.*;
@@ -27,6 +29,7 @@ import com.github.razorplay01.network.ClientNetworkManager;
 import com.github.razorplay01.network.FabricCustomPayload;
 import com.github.razorplay01.network.ServerNetworkManager;
 import com.github.razorplay01.sound.ModSounds;
+import com.github.razorplay01.system.NoiseDetectionSystem;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.ModInitializer;
 
@@ -36,6 +39,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
@@ -55,26 +59,32 @@ public class GWW implements ModInitializer, ClientModInitializer {
     public void onInitialize() {
         FabricCustomPayload.register();
         ServerNetworkManager.register();
-        GwwSettings.load();
-        InstanceManager.loadAll();
-        ArenaManager.load();
-        CannonArenaManager.load();
+        // Un único bucle por tick para todo el mod. El sistema de ruido tenía el suyo
+        // aparte, así que la lista de jugadores se recorría dos veces por tick.
         ServerTickEvents.START_SERVER_TICK.register(server -> {
             ArenaManager.tickGroups(server);
             EscapeRoomController.tick(server);
+            NoiseDetectionSystem.tickAll(server);
             MinigameManager.tick();
             ChunkPreloader.tick();
+            GwwDebug.tick();
         });
         // Morir jugando a los cañones no es una muerte de verdad: la partida
         // repone la vida y deja al jugador de espectador viendo a los demás.
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, damageSource, damageAmount) ->
                 !(entity instanceof ServerPlayer player && MinigameManager.onPlayerDeath(player)));
         NoiseEventHandler.register();
+        // Al desconectarse hay que soltar su estado de ruido en el momento: si se
+        // espera al barrido periódico, los mapas del sistema van creciendo con
+        // jugadores que ya no están.
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, minecraftServer) ->
+                NoiseDetectionSystem.removePlayer(handler.getPlayer().getUUID()));
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             MinigameCommand.register(dispatcher);
             NoiseCommand.register(dispatcher);
             EscapeRoomCommands.register(dispatcher);
             EscapeRoomConfigCommand.register(dispatcher);
+            GwwDebugCommand.register(dispatcher);
         });
         ModComponents.register();
         ModItems.registerModItems();
@@ -121,20 +131,32 @@ public class GWW implements ModInitializer, ClientModInitializer {
                 cleanLockedSlots(player);
             }
         });*/
-        ServerLifecycleEvents.SERVER_STARTING.register(minecraftServer -> server = minecraftServer);
+        // Los archivos de config se cargan (y se crean si faltan) al arrancar el servidor,
+        // no al cargar el mod: este es un mod de minijuegos de servidor y un cliente
+        // conectándose no tiene nada que hacer con config/GWW. Si se hiciera en
+        // onInitialize, que Fabric ejecuta también en el cliente, cada jugador acabaría
+        // con una carpeta config/GWW inútil en su .minecraft.
+        ServerLifecycleEvents.SERVER_STARTING.register(minecraftServer -> {
+            server = minecraftServer;
+            GwwSettings.load();
+            InstanceManager.loadAll();
+            ArenaManager.load();
+            CannonArenaManager.load();
+        });
         // Al apagar, cerrar las partidas: si no, los cañones y balas quedan guardados
         // en el mundo y reaparecen al arrancar de nuevo, ya sin nadie que los mueva.
         ServerLifecycleEvents.SERVER_STOPPING.register(minecraftServer -> MinigameManager.stopAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(minecraftServer -> {
             server = null;
             ChunkPreloader.reset();
+            NoiseDetectionSystem.clearAll();
         });
         LOGGER.info("Hello Fabric world!");
     }
 
     @Override
     public void onInitializeClient() {
-        AnnotationFinder.clientLoading();
+        CameraPluginLoader.clientLoading();
         ClientNetworkManager.register();
         EntityRendererRegistry.register(ModEntities.CANNON, CannonEntityRenderer::new);
         EntityRendererRegistry.register(ModEntities.CANNON_BULLET, CannonBulletEntityRenderer::new);

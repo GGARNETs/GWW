@@ -25,6 +25,13 @@ public class PlayerNoiseData {
 
     private UUID groupLeader = null; // Nuevo: líder del grupo para ruido compartido
 
+    // Control de envío al cliente (solo se usa en los datos del líder del grupo).
+    // Sirven para no gastar un paquete repitiendo lo que el cliente ya sabe.
+    /** Último valor de barra que se envió. -1 = nunca se envió nada. */
+    private float lastSentNoise = -1.0f;
+    private boolean lastSentEnabled = false;
+    private int ticksSinceSync = 0;
+
     // Configuración de pasos
     private static final float STEP_DISTANCE_NORMAL = 0.6f;
     private static final float STEP_DISTANCE_SNEAKING = 1.2f;

@@ -1,22 +1,19 @@
 package com.github.razorplay01.event;
 
 import com.github.razorplay01.system.NoiseDetectionSystem;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.event.player.*;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionResult;
 
+/**
+ * Enganches del sistema de ruido a los eventos del juego.
+ * <p>
+ * El tick ya NO se registra aquí: antes esta clase enganchaba su propio
+ * END_SERVER_TICK y recorría la lista entera de jugadores, sumando un segundo
+ * barrido al que el mod ya hacía en su tick principal. Ahora el tick del ruido lo
+ * llama {@code GWW} desde el único bucle que hay, vía
+ * {@link NoiseDetectionSystem#tickAll}.
+ */
 public class NoiseEventHandler {
 
     public static void register() {
-
-        // Tick del servidor para actualizar ruido de todos los jugadores
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                NoiseDetectionSystem.tick(player);
-            }
-        });
-
         // Romper bloques
         /*PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
             if (player instanceof ServerPlayer serverPlayer) {

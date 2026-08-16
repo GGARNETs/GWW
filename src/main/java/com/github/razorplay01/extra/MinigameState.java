@@ -4,6 +4,7 @@ import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.razorplay01.entity.ModEntities;
 import com.github.razorplay01.entity.custom.CannonBulletEntity;
 import com.github.razorplay01.entity.custom.CannonEntity;
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.integration.GeoWarePointsIntegration;
 import com.github.razorplay01.network.ServerNetworkManager;
 import com.github.razorplay01.network.packet.MinigameStatePacket;
@@ -215,6 +216,7 @@ public class MinigameState {
      * juego a propósito: así un admin puede entrar y salir sin quedarse encerrado.
      */
     private void refreshPlayers() {
+        GwwDebug.count(GwwDebug.ENTITY_SCANS);
         List<ServerPlayer> found = world.getEntitiesOfClass(ServerPlayer.class, arena.getSearchBounds(),
                 player -> !player.isSpectator() && !player.isCreative() && arena.contains(player.position()));
 
@@ -300,11 +302,13 @@ public class MinigameState {
                 }
                 player.connection.teleport(center.x + nx * target, player.getY(), center.z + nz * target,
                         player.getYRot(), player.getXRot());
+                GwwDebug.count(GwwDebug.VELOCITY_PUSHES);
             } else {
                 double strength = (dist - softRadius) / (radius - softRadius);
                 player.setDeltaMovement(player.getDeltaMovement()
                         .add(-nx * WALL_PUSH * strength, 0, -nz * WALL_PUSH * strength));
                 player.hurtMarked = true;
+                GwwDebug.count(GwwDebug.VELOCITY_PUSHES);
             }
         }
     }
@@ -356,6 +360,8 @@ public class MinigameState {
         ).normalize();
 
         pendingShots.add(new PendingShot(cannon, cannonPos, shootDirection, SHOOT_DELAY));
+        GwwDebug.log(GwwDebug.Category.MINIGAME, "Arena {}: cañón {}/{} en {}",
+                arena.getId(), shotsSpawned + 1, totalShots, cannon.blockPosition());
     }
 
     private void updatePendingShots() {
@@ -445,6 +451,8 @@ public class MinigameState {
             if (!player.getBoundingBox().intersects(bulletBox)) continue;
 
             bullet.alreadyHit.add(player.getUUID());
+            GwwDebug.log(GwwDebug.Category.MINIGAME, "Arena {}: bala impacta a {}",
+                    arena.getId(), player.getGameProfile().getName());
             if (bulletDamage > 0) {
                 player.hurt(world.damageSources().generic(), bulletDamage);
                 // Si el balazo lo mató, eliminate() ya lo dejó de espectador:

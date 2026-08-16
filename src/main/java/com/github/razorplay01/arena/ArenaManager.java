@@ -1,6 +1,7 @@
 package com.github.razorplay01.arena;
 
 import com.github.razorplay01.GWW;
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
@@ -315,6 +316,20 @@ public class ArenaManager {
     }
 
     /**
+     * Ruido del grupo de la arena que contiene esa posición, o -1 si ahí no hay arena.
+     * <p>
+     * Es lo que consulta el Ublabla para saber si le han hecho ruido. Antes cada
+     * Ublabla recorría la lista completa de jugadores del servidor comprobando cuáles
+     * caían dentro de su área de patrulla; con una sala por Ublabla y 100 jugadores
+     * conectados eso era mirar 100 posiciones para acabar leyendo un número que la
+     * arena ya tiene calculado.
+     */
+    public static float getNoiseLevelAt(Vec3 pos) {
+        Arena arena = getArenaAt(pos);
+        return arena == null ? -1f : NoiseDetectionSystem.getGroupNoiseLevel(arena.getNoiseGroupId());
+    }
+
+    /**
      * Área en la que una entidad debe buscar a sus compañeras de puzzle: la zona de su
      * arena si está dentro de una, o el margen indicado si no (entidades sueltas en un
      * mundo de pruebas, sin arena configurada).
@@ -340,6 +355,7 @@ public class ArenaManager {
      * se fuerza aquí para que el cambio se note al instante.
      */
     public static void setRunning(String id, boolean running) {
+        GwwDebug.log(GwwDebug.Category.ARENA, "Arena {} {}", id, running ? "arrancada" : "parada");
         if (running) {
             RUNNING.add(id);
             // Arrancar es empezar una partida nueva: se rearma la victoria y el aviso.
@@ -390,14 +406,9 @@ public class ArenaManager {
 
         // Jugadores desconectados: sacarlos del grupo para que no arrastren
         // el estado de la arena al reconectarse en otro sitio.
-        PLAYER_ARENAS.entrySet().removeIf(entry -> {
-            if (!online.contains(entry.getKey())) {
-                NoiseDetectionSystem.removeFromArenaGroup(entry.getKey());
-                return true;
-            }
-            return false;
-        });
+        PLAYER_ARENAS.keySet().removeIf(id -> !online.contains(id));
         PLAYER_LIGHT_ARENAS.keySet().removeIf(id -> !online.contains(id));
+        NoiseDetectionSystem.pruneOffline(online);
     }
 
     private static void updateNoiseGroup(ServerPlayer player, Arena zone) {
@@ -420,6 +431,10 @@ public class ArenaManager {
             NoiseDetectionSystem.joinArenaGroup(player, arena.getNoiseGroupId());
             PLAYER_ARENAS.put(player.getUUID(), newId);
         }
+        GwwDebug.log(GwwDebug.Category.ARENA, "{}: arena {} -> {}",
+                player.getGameProfile().getName(),
+                currentId == null ? "ninguna" : currentId,
+                newId == null ? "ninguna" : newId);
     }
 
     /**

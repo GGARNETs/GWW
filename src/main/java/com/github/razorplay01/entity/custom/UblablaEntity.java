@@ -2,8 +2,10 @@ package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.config.GwwSettings;
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.integration.GeoWarePointsIntegration;
 import com.github.razorplay01.entity.custom.util.EscapeRoomPersistable;
+import com.github.razorplay01.entity.custom.util.NearbyPlayers;
 import com.github.razorplay01.entity.custom.util.PuzzleEntityChecker;
 import com.github.razorplay01.system.NoiseDetectionSystem;
 import lombok.Getter;
@@ -154,6 +156,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
             Vec3 absPos = spawnCenter.add(rel);
             AABB box = new AABB(absPos.x - 3, absPos.y - 3, absPos.z - 3,
                     absPos.x + 3, absPos.y + 3, absPos.z + 3);
+            GwwDebug.count(GwwDebug.ENTITY_SCANS);
             List<PuertaMetalicaUblablaEntity> found = level().getEntitiesOfClass(
                     PuertaMetalicaUblablaEntity.class, box, e -> true);
             if (!found.isEmpty()) {
@@ -189,7 +192,25 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     }
 
     private void setState(int state) {
+        int previous = this.entityData.get(STATE);
         this.entityData.set(STATE, state);
+        if (previous != state) {
+            GwwDebug.log(GwwDebug.Category.UBLABLA, "Ublabla en {} pasa de {} a {}",
+                    this.blockPosition(), stateName(previous), stateName(state));
+        }
+    }
+
+    private static String stateName(int state) {
+        return switch (state) {
+            case STATE_PATROL -> "patrulla";
+            case STATE_ALERT -> "alerta";
+            case STATE_INVESTIGATING -> "investigando";
+            case STATE_CHASING -> "persiguiendo";
+            case STATE_ATTACKING -> "atacando";
+            case STATE_CHECKING -> "revisando";
+            case STATE_RETURNING -> "volviendo";
+            default -> "desconocido(" + state + ")";
+        };
     }
 
     @Override
@@ -248,6 +269,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
             setNoAi(false);
         }
 
+        GwwDebug.count(GwwDebug.UBLABLA_TICKS);
         decrementCooldowns();
 
         switch (getState()) {
@@ -412,7 +434,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         if (jailMin == null || jailMax == null) return false;
 
         AABB jailBox = new AABB(jailMin.getCenter(), jailMax.getCenter());
-        List<Player> players = level().getEntitiesOfClass(Player.class, buildPatrolArea());
+        List<Player> players = NearbyPlayers.within(this, buildPatrolArea());
 
         if (players.isEmpty()) return false;
 
@@ -444,6 +466,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         }
         AABB area = buildPatrolArea();
         Level level = level();
+        GwwDebug.count(GwwDebug.ENTITY_SCANS, 6);
 
         level.getEntitiesOfClass(BaseCuadroEntity.class, area, BaseCuadroEntity::hasBeenMoved)
                 .forEach(BaseCuadroEntity::snapToInitial);
@@ -466,8 +489,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     }
 
     private void playPunishSound() {
-        AABB area = buildPatrolArea();
-        level().getEntitiesOfClass(Player.class, area).forEach(player -> {
+        for (Player player : NearbyPlayers.within(this, buildPatrolArea())) {
             if (player instanceof ServerPlayer sp) {
                 sp.level().playSound(
                         null,
@@ -478,7 +500,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
                         0.8f
                 );
             }
-        });
+        }
     }
 
     private void tickChasing() {
@@ -534,7 +556,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         AABB jailBox = new AABB(jailMin.getCenter(), jailMax.getCenter());
         // Misma área que usa el resto de la clase. Antes era inflate(patrolRadius * 2),
         // un cubo 5 veces más grande que alcanzaba salas vecinas sin motivo.
-        List<Player> players = level().getEntitiesOfClass(Player.class, buildPatrolArea());
+        List<Player> players = NearbyPlayers.within(this, buildPatrolArea());
 
         for (Player p : players) {
             if (!jailBox.contains(p.position())) {
@@ -597,8 +619,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     }
 
     private void teleportPlayersToJail() {
-        AABB area = buildPatrolArea();
-        List<Player> players = level().getEntitiesOfClass(Player.class, area);
+        List<Player> players = NearbyPlayers.within(this, buildPatrolArea());
 
         BlockPos destination;
         String message;
@@ -630,12 +651,21 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         return target != null && target.isAlive() && this.distanceToSqr(target) <= LOSE_TARGET_DISTANCE_SQ;
     }
 
+    /**
+     * Cuánto ruido hay en la sala. Si el Ublabla está dentro de una arena configurada
+     * el dato sale directo del grupo de esa arena, que es una lectura y ya. Solo si
+     * está suelto (sala de pruebas sin arena) se cae al barrido de jugadores.
+     */
     private float getHighestGroupNoise() {
         if (patrolCenter == null || level().getServer() == null) return 0;
 
+        float arenaNoise = ArenaManager.getNoiseLevelAt(this.position());
+        if (arenaNoise >= 0) {
+            return arenaNoise;
+        }
+
         AABB area = buildPatrolArea();
         float max = 0;
-
         for (ServerPlayer player : level().getServer().getPlayerList().getPlayers()) {
             if (area.contains(player.position())) {
                 float noise = NoiseDetectionSystem.getNoiseLevel(player.getUUID());
@@ -662,10 +692,10 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     }
 
     private void broadcastMessage(String message) {
-        AABB area = buildPatrolArea();
-        level().getEntitiesOfClass(Player.class, area).forEach(player ->
-                player.sendSystemMessage(Component.literal("§6[Ublabla] §f" + message))
-        );
+        for (Player player : NearbyPlayers.within(this, buildPatrolArea())) {
+            player.sendSystemMessage(Component.literal("§6[Ublabla] §f" + message));
+            GwwDebug.count(GwwDebug.PACKETS_MESSAGES);
+        }
     }
 
     /**
@@ -682,9 +712,10 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
         actionBarCooldown = 0;
         lastActionBarMessage = message;
 
-        AABB area = buildPatrolArea();
-        level().getEntitiesOfClass(Player.class, area).forEach(player ->
-                player.displayClientMessage(Component.literal(message), true));
+        for (Player player : NearbyPlayers.within(this, buildPatrolArea())) {
+            player.displayClientMessage(Component.literal(message), true);
+            GwwDebug.count(GwwDebug.PACKETS_MESSAGES);
+        }
     }
 
     @Override

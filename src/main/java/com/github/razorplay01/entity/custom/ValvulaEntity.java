@@ -1,6 +1,7 @@
 package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.arena.ArenaManager;
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.util.NearbyPlayers;
 import com.github.razorplay01.entity.custom.util.ValvulaType;
 import com.github.razorplay01.sound.ModSounds;
@@ -358,6 +359,7 @@ public class ValvulaEntity extends BaseEntity {
             serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
                     worldPos.x, worldPos.y, worldPos.z, emitter.count,
                     worldDir.x, worldDir.y, worldDir.z, emitter.speed);
+            GwwDebug.count(GwwDebug.PARTICLES);
         }
     }
 
@@ -450,6 +452,7 @@ public class ValvulaEntity extends BaseEntity {
 
         player.setDeltaMovement(newX, newY, newZ);
         player.hurtMarked = true;
+        GwwDebug.count(GwwDebug.VELOCITY_PUSHES);
 
         if (player.isSprinting()) {
             player.setSprinting(false);
