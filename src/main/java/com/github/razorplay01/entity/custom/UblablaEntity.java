@@ -63,8 +63,6 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
     /** Cada cuántos ticks se reenvía la action bar si el texto no ha cambiado. */
     private static final int ACTION_BAR_RESEND_INTERVAL = 10;
     private static final double CATCH_DISTANCE_SQ = 5.29;
-    /** Puntos que pierde cada jugador al que el Ublabla devuelve a la jaula. */
-    private static final int JAIL_POINTS_PENALTY = -50;
     private static final double LOSE_TARGET_DISTANCE_SQ = 2500.0;
 
     /** Bloques que desanda sobre sus pasos antes del teletransporte al puesto. */
@@ -641,7 +639,7 @@ public class UblablaEntity extends PathfinderMob implements GeoEntity, EscapeRoo
                 sp.teleportTo(destination.getX() + 0.5, destination.getY() + 1.0, destination.getZ() + 0.5);
                 sp.sendSystemMessage(Component.literal(message));
                 // Que te devuelvan a la jaula cuesta puntos a todos los descubiertos.
-                GeoWarePointsIntegration.award(sp, JAIL_POINTS_PENALTY);
+                GeoWarePointsIntegration.award(sp, GwwSettings.jailPenalty());
             }
         }
     }

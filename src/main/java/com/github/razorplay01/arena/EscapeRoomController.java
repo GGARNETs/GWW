@@ -1,5 +1,6 @@
 package com.github.razorplay01.arena;
 
+import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.PanelEnergiaEntity;
 import com.github.razorplay01.entity.custom.UblablaEntity;
@@ -58,7 +59,6 @@ public final class EscapeRoomController {
      * que puede hacer el mod. Dos segundos de retraso en un aviso no los nota nadie.
      */
     private static final int ESCAPE_SCAN_INTERVAL = 40;
-    private static final int VICTORY_POINTS = 200;
 
     /** Arenas a las que ya se les lanzó el aviso de "¡ESCAPA!" en la ronda actual. */
     private static final Set<String> escapeAlerted = new HashSet<>();
@@ -223,12 +223,13 @@ public final class EscapeRoomController {
         Component title = Component.literal("¡HAN ESCAPADO!")
                 .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD);
         Component subtitle = Component.literal("¡Felicidades!").withStyle(ChatFormatting.YELLOW);
+        int victoryPoints = GwwSettings.victoryPoints();
         for (ServerPlayer player : players) {
             player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 80, 20));
             player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
             player.connection.send(new ClientboundSetTitleTextPacket(title));
             player.playNotifySound(ModSounds.VICTORY, SoundSource.MASTER, 1.0f, 1.0f);
-            GeoWarePointsIntegration.award(player, VICTORY_POINTS);
+            GeoWarePointsIntegration.award(player, victoryPoints);
             player.setGameMode(GameType.SPECTATOR);
             GwwDebug.count(GwwDebug.PACKETS_MESSAGES, 3);
         }

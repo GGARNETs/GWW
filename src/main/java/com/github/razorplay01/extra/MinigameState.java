@@ -4,6 +4,7 @@ import com.github.darkpred.morehitboxes.api.MultiPart;
 import com.github.razorplay01.entity.ModEntities;
 import com.github.razorplay01.entity.custom.CannonBulletEntity;
 import com.github.razorplay01.entity.custom.CannonEntity;
+import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.integration.GeoWarePointsIntegration;
 import com.github.razorplay01.network.ServerNetworkManager;
@@ -67,10 +68,10 @@ public class MinigameState {
     /** Filtro rápido bala-jugador antes de comparar hitboxes. */
     private static final double HIT_PRECHECK_RANGE_SQ = 9.0;
 
-    /** Puntos que pierde quien muere en la partida. */
-    private static final int DEATH_POINT_PENALTY = 10;
-    /** Puntos que gana quien sigue vivo cuando termina la partida. */
-    private static final int SURVIVOR_POINT_REWARD = 20;
+    /** Muestra el número con su signo delante, para los mensajes de puntos. */
+    private static String signed(int points) {
+        return points > 0 ? "+" + points : String.valueOf(points);
+    }
 
     @Getter
     private final ServerLevel world;
@@ -264,10 +265,11 @@ public class MinigameState {
         eliminated.put(player.getUUID(), player.gameMode.getGameModeForPlayer());
         player.setHealth(player.getMaxHealth());
         player.setGameMode(GameType.SPECTATOR);
-        GeoWarePointsIntegration.award(player, -DEATH_POINT_PENALTY);
+        int penalty = GwwSettings.minigameDeathPenalty();
+        GeoWarePointsIntegration.award(player, penalty);
         ServerNetworkManager.sendMinigameStatePacketToPlayer(player, MinigameStatePacket.inactive());
         player.sendSystemMessage(Component.literal(
-                "§c💀 ¡Te alcanzaron! Quedas de espectador (-" + DEATH_POINT_PENALTY + " puntos)."), false);
+                "§c💀 ¡Te alcanzaron! Quedas de espectador (" + signed(penalty) + " puntos)."), false);
         return true;
     }
 
@@ -497,13 +499,14 @@ public class MinigameState {
         movingBullets.clear();
         pendingShots.clear();
 
+        int survivorPoints = GwwSettings.minigameSurvivorPoints();
         for (ServerPlayer player : playersInside) {
             // Un recién eliminado puede seguir en la lista hasta el próximo
             // refresco: es espectador y no le toca premio de superviviente.
             if (player.isRemoved() || player.isSpectator() || eliminated.containsKey(player.getUUID())) continue;
-            GeoWarePointsIntegration.award(player, SURVIVOR_POINT_REWARD);
+            GeoWarePointsIntegration.award(player, survivorPoints);
             player.sendSystemMessage(Component.literal(
-                    "§e⏰ ¡Minijuego terminado! Has sobrevivido (+" + SURVIVOR_POINT_REWARD + " puntos)."), false);
+                    "§e⏰ ¡Minijuego terminado! Has sobrevivido (" + signed(survivorPoints) + " puntos)."), false);
         }
 
         // A los muertos se les devuelve su modo de juego, de vuelta en la arena.

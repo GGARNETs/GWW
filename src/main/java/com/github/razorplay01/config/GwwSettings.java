@@ -42,6 +42,12 @@ public class GwwSettings {
     private static float landingNormal = 0.4f;
     private static float landingHard = 0.7f;
 
+    // ---- Puntos de GeoWarePoints ----
+    private static int victoryPoints = 200;
+    private static int jailPenalty = -50;
+    private static int minigameSurvivorPoints = 20;
+    private static int minigameDeathPenalty = -10;
+
     private static final String DEFAULT_CONFIG = """
             # ============================================================
             #  GWW - Ajustes generales del Escape Room
@@ -87,6 +93,21 @@ public class GwwSettings {
               landing_soft: 0.2
               landing_normal: 0.4
               landing_hard: 0.7
+
+            points:
+              # Puntos que reparte el mod GeoWarePoints. Si ese mod no esta
+              # instalado, estos valores no hacen nada.
+              # Positivo = suma, negativo = resta. Pon 0 para desactivarlo.
+
+              # Al pisar la zona de meta: lo cobran TODOS los jugadores de la sala.
+              victory: 200
+
+              # Al ser devuelto a la jaula por el Ublabla.
+              jail_penalty: -50
+
+              # Minijuego de los cañones: sobrevivir hasta el final / morir.
+              minigame_survivor: 20
+              minigame_death: -10
             """;
 
     public static Path getConfigFile() {
@@ -137,6 +158,13 @@ public class GwwSettings {
                 landingHard = (float) positive(noise, "landing_hard", landingHard, errors);
             }
 
+            if (root.get("points") instanceof Map<?, ?> points) {
+                victoryPoints = integer(points, "victory", victoryPoints, errors);
+                jailPenalty = integer(points, "jail_penalty", jailPenalty, errors);
+                minigameSurvivorPoints = integer(points, "minigame_survivor", minigameSurvivorPoints, errors);
+                minigameDeathPenalty = integer(points, "minigame_death", minigameDeathPenalty, errors);
+            }
+
             GWW.LOGGER.info("[GWW] Ajustes cargados desde {}", file);
         } catch (Exception e) {
             errors.add("Error leyendo settings.yml: " + e.getMessage());
@@ -159,6 +187,22 @@ public class GwwSettings {
             return fallback;
         }
         return number.doubleValue();
+    }
+
+    /**
+     * Lee un entero que puede ser negativo o cero, porque las penalizaciones restan
+     * y un 0 es la forma de desactivar ese premio.
+     */
+    private static int integer(Map<?, ?> section, String key, int fallback, List<String> errors) {
+        Object value = section.get(key);
+        if (value == null) {
+            return fallback;
+        }
+        if (!(value instanceof Number number)) {
+            errors.add("settings.yml: '" + key + "' debe ser un número entero (se usa " + fallback + ")");
+            return fallback;
+        }
+        return number.intValue();
     }
 
     // ==================== UBLABLA ====================
@@ -216,5 +260,26 @@ public class GwwSettings {
 
     public static float landingHard() {
         return landingHard;
+    }
+
+    // ==================== PUNTOS ====================
+
+    /** Puntos que gana cada jugador de la sala al pisar la meta. */
+    public static int victoryPoints() {
+        return victoryPoints;
+    }
+
+    /** Puntos (normalmente negativos) al ser devuelto a la jaula por el Ublabla. */
+    public static int jailPenalty() {
+        return jailPenalty;
+    }
+
+    public static int minigameSurvivorPoints() {
+        return minigameSurvivorPoints;
+    }
+
+    /** Puntos (normalmente negativos) al morir en el minijuego de cañones. */
+    public static int minigameDeathPenalty() {
+        return minigameDeathPenalty;
     }
 }
