@@ -171,6 +171,16 @@ public abstract class BaseEntity extends PathfinderMob implements GeoEntity {
         return true;
     }
 
+    /**
+     * El CustomName de teclados y cajas es solo su clave en puzzles.yml, nunca un
+     * cartel: vanilla lo dibuja igualmente al apuntar a la entidad aunque
+     * customNameVisible sea false, así que se corta aquí para todo el atrezzo.
+     */
+    @Override
+    public boolean shouldShowName() {
+        return false;
+    }
+
     @Override
     public boolean canCollideWith(Entity entity) {
         return true;

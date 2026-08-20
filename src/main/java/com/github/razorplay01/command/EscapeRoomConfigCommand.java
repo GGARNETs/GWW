@@ -1119,8 +1119,8 @@ public class EscapeRoomConfigCommand {
         try {
             InterruptorIndustrialEntity interruptor = getEntityOfType(context, "interruptor", InterruptorIndustrialEntity.class, NOT_INTERRUPTOR);
             if (interruptor == null) return 0;
-            interruptor.unlinkTeclado();
-            sendSuccess(context, "§aEnlace con el teclado eliminado: vuelve a funcionar por su cuenta.");
+            interruptor.unlinkAllTeclados();
+            sendSuccess(context, "§aEnlaces con teclados eliminados: vuelven a funcionar por su cuenta.");
             return 1;
         } catch (Exception e) {
             sendFailure(context, "§cError: " + e.getMessage());

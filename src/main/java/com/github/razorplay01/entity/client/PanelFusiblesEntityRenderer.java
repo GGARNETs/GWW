@@ -36,17 +36,11 @@ public class PanelFusiblesEntityRenderer extends GeoEntityRenderer<PanelFusibles
         rOn.ifPresent(geoBone -> geoBone.setHidden(!entity.areAllSlotsFilled(1)));
 
         // Antes de renderizar, configurar visibilidad de los huesos de fusible.
-        // Cada slot tiene dos formas: la clásica (rojo/verde/azul) y la de anillo
-        // (amarillo/violeta); se muestra solo la que corresponde al tipo puesto.
+        // Todos los colores comparten la misma forma: solo cambia el tinte.
         for (int i = 0; i < PanelFusiblesEntity.FUSE_BONE_NAMES.length; i++) {
-            int fuseType = entity.getFuseSlot(i);
-            boolean empty = fuseType == PanelFusiblesEntity.FUSE_NONE;
-            boolean alt = PanelFusiblesEntity.usesAltShape(fuseType);
-
+            boolean empty = entity.getFuseSlot(i) == PanelFusiblesEntity.FUSE_NONE;
             model.getBone(PanelFusiblesEntity.FUSE_BONE_NAMES[i])
-                    .ifPresent(bone -> bone.setHidden(empty || alt));
-            model.getBone(PanelFusiblesEntity.FUSE_ALT_BONE_NAMES[i])
-                    .ifPresent(bone -> bone.setHidden(empty || !alt));
+                    .ifPresent(bone -> bone.setHidden(empty));
         }
 
         // Renderizar normalmente (esto renderiza el panel SIN tinte en los fusibles)
@@ -83,14 +77,10 @@ public class PanelFusiblesEntityRenderer extends GeoEntityRenderer<PanelFusibles
                 buffer, isReRender, partialTick, packedLight, packedOverlay, colour);
     }
 
-    /**
-     * Devuelve el índice de slot (0-7) si el nombre del hueso es un fusible
-     * (forma clásica o alternativa), o -1 si no lo es.
-     */
+    /** Devuelve el índice de slot (0-7) si el nombre del hueso es un fusible, o -1 si no lo es. */
     private int getFuseSlotIndex(String boneName) {
         for (int i = 0; i < PanelFusiblesEntity.FUSE_BONE_NAMES.length; i++) {
-            if (PanelFusiblesEntity.FUSE_BONE_NAMES[i].equals(boneName)
-                    || PanelFusiblesEntity.FUSE_ALT_BONE_NAMES[i].equals(boneName)) {
+            if (PanelFusiblesEntity.FUSE_BONE_NAMES[i].equals(boneName)) {
                 return i;
             }
         }

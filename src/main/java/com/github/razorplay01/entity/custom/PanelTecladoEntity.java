@@ -441,13 +441,9 @@ public class PanelTecladoEntity extends BaseEntity implements GeckoLibMultiPartE
                             d -> d.position().distanceToSqr(absolutePos) < 3.0)
                     .forEach(door -> door.setOpen(open));
 
-            // La trampilla del ático solo se abre: no tiene animación de cierre y en
-            // el diseño de la sala nunca vuelve a cerrarse.
-            if (open) {
-                this.level().getEntitiesOfClass(PuertaAticoEntity.class, area,
-                                d -> d.position().distanceToSqr(absolutePos) < 3.0)
-                        .forEach(PuertaAticoEntity::openFromKeypad);
-            }
+            this.level().getEntitiesOfClass(PuertaAticoEntity.class, area,
+                            d -> d.position().distanceToSqr(absolutePos) < 3.0)
+                    .forEach(open ? PuertaAticoEntity::openFromKeypad : PuertaAticoEntity::closeFromKeypad);
         }
     }
 

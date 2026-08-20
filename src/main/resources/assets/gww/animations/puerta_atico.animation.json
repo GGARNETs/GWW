@@ -84,6 +84,62 @@
 				}
 			}
 		},
+		"animation.close": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.5,
+			"bones": {
+				"bone2": {
+					"rotation": {
+						"0.0": {
+							"vector": [-117.5, 0, 0]
+						},
+						"0.375": {
+							"vector": [0, 0, 0]
+						}
+					}
+				},
+				"bone3": {
+					"position": {
+						"0.0": {
+							"vector": [0, 1, 0]
+						},
+						"0.4167": {
+							"vector": [0, 0, 0]
+						}
+					}
+				},
+				"bone4": {
+					"rotation": {
+						"0.0": {
+							"vector": [95, 0, 10]
+						},
+						"0.3333": {
+							"vector": [10, 0, 10]
+						},
+						"0.4167": {
+							"vector": [0, 0, 10]
+						},
+						"0.5": {
+							"vector": [0, 0, 0]
+						}
+					},
+					"position": {
+						"0.0": {
+							"vector": [1, 2, 3]
+						},
+						"0.3333": {
+							"vector": [1, -1, 0]
+						},
+						"0.4167": {
+							"vector": [0, -1, 0]
+						},
+						"0.5": {
+							"vector": [0, 0, 0]
+						}
+					}
+				}
+			}
+		},
 		"animation.idle": {
 			"animation_length": 0.5,
 			"bones": {

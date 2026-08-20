@@ -1,5 +1,6 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -16,7 +17,16 @@ import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.NotNull;
 import software.bernie.geckolib.animation.AnimatableManager;
 
+/**
+ * Cartel de pared de estados: primero las 4 figuras y, si se sigue haciendo clic,
+ * los números del 0 al 99 (pintados con el mismo estilo). Una sola entidad
+ * controla todo: en creativo clic = +1 y agachado + clic = +10.
+ */
 public class FigurasParedEntity extends BaseEntity {
+    /** Estados 0-3: figuras. Estados 4-103: números 0-99. */
+    public static final int FIGURA_STATES = 4;
+    public static final int MAX_STATE = FIGURA_STATES + 100 - 1;
+
     private static final EntityDataAccessor<Direction> DATA_FACING =
             SynchedEntityData.defineId(FigurasParedEntity.class, EntityDataSerializers.DIRECTION);
     private static final EntityDataAccessor<Integer> STATE = SynchedEntityData.defineId(
@@ -38,7 +48,7 @@ public class FigurasParedEntity extends BaseEntity {
     }
 
     public void setState(int state) {
-        if (state < 0 || state > 3) state = 0;
+        if (state < 0 || state > MAX_STATE) state = 0;
         this.entityData.set(STATE, state);
     }
 
@@ -74,7 +84,9 @@ public class FigurasParedEntity extends BaseEntity {
     @Override
     public void handleNormalInteract(Player player) {
         if (!player.level().isClientSide && player.isCreative()) {
-            setState((getState() + 1) % 4);
+            int step = player.isShiftKeyDown() ? 10 : 1;
+            setState((getState() + step) % (MAX_STATE + 1));
+            ModSounds.playAt(this, ModSounds.BUTTON_PRESS, 0.5F, step == 10 ? 0.9F : 1.1F);
         }
     }
 

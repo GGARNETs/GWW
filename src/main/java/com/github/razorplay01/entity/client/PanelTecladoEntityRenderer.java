@@ -8,6 +8,13 @@ import software.bernie.geckolib.renderer.layer.FastBoneFilterGeoLayer;
 import java.util.Arrays;
 
 public class PanelTecladoEntityRenderer extends GeoEntityRenderer<PanelTecladoEntity> {
+
+    /** El nombre es solo la clave de puzzles.yml: nunca se dibuja como cartel. */
+    @Override
+    public boolean shouldShowName(PanelTecladoEntity entity) {
+        return false;
+    }
+
     public PanelTecladoEntityRenderer(EntityRendererProvider.Context context) {
         super(context, new PanelTecladoEntityModel());
         this.addRenderLayer(new FastBoneFilterGeoLayer<>(this,

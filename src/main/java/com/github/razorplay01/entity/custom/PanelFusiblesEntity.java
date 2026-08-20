@@ -84,17 +84,6 @@ public class PanelFusiblesEntity extends BaseEntity implements GeckoLibMultiPart
             "fusil_5", "fusil_6", "fusil_7", "fusil_8"
     };
 
-    /** Huesos de la forma alternativa: la llevan los fusibles amarillo y violeta. */
-    public static final String[] FUSE_ALT_BONE_NAMES = {
-            "fusil_1_b", "fusil_2_b", "fusil_3_b", "fusil_4_b",
-            "fusil_5_b", "fusil_6_b", "fusil_7_b", "fusil_8_b"
-    };
-
-    /** true si ese tipo de fusible se dibuja con la forma alternativa (con anillo). */
-    public static boolean usesAltShape(int fuseType) {
-        return fuseType == FUSE_AMARILLO || fuseType == FUSE_VIOLETA;
-    }
-
     private static final int[] DEFAULT_SOLUTION = {FUSE_ROJO, FUSE_VERDE, FUSE_AZUL, FUSE_AMARILLO};
 
     // Solución de respaldo por panel (NBT, vía setsolution). La manda puzzles.yml:

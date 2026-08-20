@@ -344,19 +344,24 @@ public class InstanceManager {
 
             reLinkSingle(interruptor.getLinkedUblablas(), interruptor.position(), allUblablas);
             reLinkSingle(interruptor.getLinkedPanels(), interruptor.position(), allPanels);
-            reLinkSingle(interruptor.getLinkedTeclados(), interruptor.position(), allTeclados);
+
+            // Los teclados nacen encendidos: con interruptor vinculado, este manda en
+            // ambos sentidos (apagado incluido). linkTeclado ya les aplica el estado.
+            List<Vec3> savedTeclados = new ArrayList<>(interruptor.getLinkedTeclados());
+            interruptor.getLinkedTeclados().clear();
+            for (Vec3 relPos : savedTeclados) {
+                PanelTecladoEntity closestTeclado =
+                        findClosest(interruptor.position().add(relPos), allTeclados, 4.0);
+                if (closestTeclado != null) {
+                    interruptor.linkTeclado(closestTeclado);
+                }
+            }
 
             if (interruptor.isOn()) {
                 PanelCodigoEntity panel = interruptor.getLinkedPanel();
                 if (panel != null) {
                     panel.setPowered(true);
                 }
-            }
-            // El teclado nace encendido: con interruptor vinculado, este manda en
-            // ambos sentidos (apagado incluido).
-            PanelTecladoEntity teclado = interruptor.getLinkedTeclado();
-            if (teclado != null) {
-                teclado.setPowered(interruptor.isOn());
             }
         }
     }

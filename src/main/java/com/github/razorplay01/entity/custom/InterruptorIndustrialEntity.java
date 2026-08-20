@@ -67,10 +67,7 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         if (panel != null) {
             panel.setPowered(nowOn); // ON → encendido, OFF → apagado
         }
-        PanelTecladoEntity teclado = getLinkedTeclado();
-        if (teclado != null) {
-            teclado.setPowered(nowOn);
-        }
+        forEachLinkedTeclado(teclado -> teclado.setPowered(nowOn));
 
         // Accionar el interruptor es uno de los dos únicos momentos en los que la luz
         // puede cambiar. El otro (alguien entra o sale de la arena) lo lleva
@@ -174,30 +171,32 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         return found.isEmpty() ? null : found.get(0);
     }
 
+    /** Un interruptor puede alimentar varios teclados (el de salida y el del ático). */
     public void linkTeclado(PanelTecladoEntity teclado) {
         if (teclado == null) return;
-        linkedTeclados.clear();
-        linkedTeclados.add(teclado.position().subtract(this.position()));
+        Vec3 relativePos = teclado.position().subtract(this.position());
+        if (!linkedTeclados.contains(relativePos)) {
+            linkedTeclados.add(relativePos);
+        }
         // El teclado nace encendido; al colgarlo de un interruptor, este manda.
         teclado.setPowered(isOn());
     }
 
-    public void unlinkTeclado() {
-        PanelTecladoEntity teclado = getLinkedTeclado();
-        if (teclado != null) {
-            teclado.setPowered(true); // suelto vuelve a funcionar por su cuenta
-        }
+    public void unlinkAllTeclados() {
+        forEachLinkedTeclado(teclado -> teclado.setPowered(true)); // sueltos funcionan por su cuenta
         linkedTeclados.clear();
     }
 
-    public PanelTecladoEntity getLinkedTeclado() {
-        if (linkedTeclados.isEmpty()) return null;
-        Vec3 relPos = linkedTeclados.get(0);
-        Vec3 expectedPos = this.position().add(relPos);
-        List<PanelTecladoEntity> found = this.level().getEntitiesOfClass(PanelTecladoEntity.class,
-                AABB.ofSize(expectedPos, 5, 5, 5),
-                p -> p.position().distanceToSqr(expectedPos) < 1.5);
-        return found.isEmpty() ? null : found.get(0);
+    public void forEachLinkedTeclado(java.util.function.Consumer<PanelTecladoEntity> action) {
+        for (Vec3 relPos : linkedTeclados) {
+            Vec3 expectedPos = this.position().add(relPos);
+            List<PanelTecladoEntity> found = this.level().getEntitiesOfClass(PanelTecladoEntity.class,
+                    AABB.ofSize(expectedPos, 5, 5, 5),
+                    p -> p.position().distanceToSqr(expectedPos) < 1.5);
+            if (!found.isEmpty()) {
+                action.accept(found.get(0));
+            }
+        }
     }
 
     @Override

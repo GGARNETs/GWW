@@ -9,4 +9,10 @@ public class CajaEntityRenderer extends GeoEntityRenderer<CajaEntity> {
     public CajaEntityRenderer(EntityRendererProvider.Context context) {
         super(context, new CajaEntityModel());
     }
+
+    /** El nombre es solo la clave de puzzles.yml: nunca se dibuja como cartel. */
+    @Override
+    public boolean shouldShowName(CajaEntity entity) {
+        return false;
+    }
 }

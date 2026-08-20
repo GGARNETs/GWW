@@ -27,6 +27,16 @@ public class PuertaAticoEntity extends BaseEntity {
 
     private static final RawAnimation ANIMATION_IDLE = RawAnimation.begin().thenLoop("animation.idle");
     private static final RawAnimation ANIMATION_OPEN = RawAnimation.begin().thenPlayAndHold("animation.open");
+    private static final RawAnimation ANIMATION_CLOSE = RawAnimation.begin()
+            .thenPlay("animation.close").thenLoop("animation.idle");
+
+    /**
+     * Solo cliente: si esta entidad se vio abierta y se cierra, toca reproducir la
+     * animación de cierre. Sin este flag, una puerta que carga ya cerrada
+     * reproduciría el cierre al aparecer el chunk.
+     */
+    private boolean clientWasOpen = false;
+    private boolean clientPlayClose = false;
 
     /**
      * Con un teclado numérico vinculado, la puerta deja de aceptar la llave: la abre
@@ -72,6 +82,16 @@ public class PuertaAticoEntity extends BaseEntity {
         NoiseDetectionSystem.addNoiseNearby(this, 20.0D, 1.0f);
     }
 
+    /** Cierre desde el teclado: mismo sonido de trampilla, más grave. */
+    public void closeFromKeypad() {
+        if (this.level().isClientSide || !isOpen()) {
+            return;
+        }
+        setOpen(false);
+        ModSounds.playAt(this, ModSounds.DOOR_ATTIC_OPEN, 1.0F, 0.8F);
+        NoiseDetectionSystem.addNoiseNearby(this, 20.0D, 1.0f);
+    }
+
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
@@ -97,9 +117,13 @@ public class PuertaAticoEntity extends BaseEntity {
                 this,
                 "puerta_controller",
                 0,
-                state -> isOpen()
-                        ? state.setAndContinue(ANIMATION_OPEN)
-                        : state.setAndContinue(ANIMATION_IDLE)
+                state -> {
+                    if (isOpen()) {
+                        clientPlayClose = false;
+                        return state.setAndContinue(ANIMATION_OPEN);
+                    }
+                    return state.setAndContinue(clientPlayClose ? ANIMATION_CLOSE : ANIMATION_IDLE);
+                }
         ));
     }
 
@@ -170,6 +194,13 @@ public class PuertaAticoEntity extends BaseEntity {
         super.onSyncedDataUpdated(key);
         if (IS_OPEN.equals(key)) {
             this.refreshDimensions();
+            if (this.level().isClientSide) {
+                boolean nowOpen = isOpen();
+                if (clientWasOpen && !nowOpen) {
+                    clientPlayClose = true;
+                }
+                clientWasOpen = nowOpen;
+            }
         }
     }
 }

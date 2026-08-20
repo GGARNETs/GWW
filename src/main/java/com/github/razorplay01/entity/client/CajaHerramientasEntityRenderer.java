@@ -8,4 +8,10 @@ public class CajaHerramientasEntityRenderer extends GeoEntityRenderer<CajaHerram
     public CajaHerramientasEntityRenderer(EntityRendererProvider.Context context) {
         super(context, new CajaHerramientasEntityModel());
     }
+
+    /** El nombre es solo la clave de puzzles.yml: nunca se dibuja como cartel. */
+    @Override
+    public boolean shouldShowName(CajaHerramientasEntity entity) {
+        return false;
+    }
 }

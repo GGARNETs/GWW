@@ -122,11 +122,7 @@ public class ModEntities {
     public static final EntityType<PanelTecladoEntity> PANEL_TECLADO = Registry.register(
             BuiltInRegistries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(GWW.MOD_ID, "panel_teclado"),
             EntityType.Builder.of(PanelTecladoEntity::new, MobCategory.MISC)
-                    .sized(0.9f, 1.5f).build());
-    public static final EntityType<NumeroParedEntity> NUMERO_PARED = Registry.register(
-            BuiltInRegistries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(GWW.MOD_ID, "numero_pared"),
-            EntityType.Builder.of(NumeroParedEntity::new, MobCategory.MISC)
-                    .sized(2f, 2f).build());
+                    .sized(0.8f, 0.9f).build());
 
     public static void registerModEntities() {
         GWW.LOGGER.info("Registering Mod Entities for " + GWW.MOD_ID);
