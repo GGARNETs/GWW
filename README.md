@@ -19,6 +19,7 @@ arranca. Un cliente que se conecta no genera nada.
 | Archivo | Qué guarda |
 |---|---|
 | `settings.yml` | Tiempos del Ublabla y dificultad de la barra de ruido |
+| `puzzles.yml` | Soluciones de los puzzles, iguales en todas las salas: códigos de los teclados, circuitos de fusibles, rotaciones de cables, estados de válvulas y contenido de cajas (por nombre) |
 | `config.yml` | Arenas del escape room (zona, jaula, instance) |
 | `cannon.yml` | Arenas del minijuego de cañones |
 | `instances/` | Salas capturadas con `/escaperoom save` |

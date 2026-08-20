@@ -4,6 +4,7 @@ import com.github.razorplay01.arena.Arena;
 import com.github.razorplay01.arena.ArenaLight;
 import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.arena.EscapeRoomController;
+import com.github.razorplay01.config.GwwPuzzles;
 import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.entity.custom.UblablaEntity;
 import com.github.razorplay01.instance.ChunkPreloader;
@@ -549,11 +550,12 @@ public class EscapeRoomCommands {
         List<String> errors = InstanceManager.loadAll();
         errors.addAll(ArenaManager.load());
         errors.addAll(GwwSettings.load());
+        errors.addAll(GwwPuzzles.load());
         errors.forEach(error -> source.sendFailure(Component.literal("§c" + error)));
 
         source.sendSuccess(() -> Component.literal(
                 "§aRecargado: " + InstanceManager.getNames().size() + " instances, "
-                        + ArenaManager.getAll().size() + " arenas y los ajustes de settings.yml."), true);
+                        + ArenaManager.getAll().size() + " arenas, settings.yml y puzzles.yml."), true);
         return errors.isEmpty() ? 1 : 0;
     }
 

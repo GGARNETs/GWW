@@ -37,6 +37,7 @@ public class InterruptorIndustrialEntity extends BaseEntity {
     private final List<Vec3> linkedCables = new ArrayList<>();
     private final List<Vec3> linkedUblablas = new ArrayList<>();
     private final List<Vec3> linkedPanels = new ArrayList<>();
+    private final List<Vec3> linkedTeclados = new ArrayList<>();
 
     public InterruptorIndustrialEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -65,6 +66,10 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         PanelCodigoEntity panel = getLinkedPanel();
         if (panel != null) {
             panel.setPowered(nowOn); // ON → encendido, OFF → apagado
+        }
+        PanelTecladoEntity teclado = getLinkedTeclado();
+        if (teclado != null) {
+            teclado.setPowered(nowOn);
         }
 
         // Accionar el interruptor es uno de los dos únicos momentos en los que la luz
@@ -169,6 +174,32 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         return found.isEmpty() ? null : found.get(0);
     }
 
+    public void linkTeclado(PanelTecladoEntity teclado) {
+        if (teclado == null) return;
+        linkedTeclados.clear();
+        linkedTeclados.add(teclado.position().subtract(this.position()));
+        // El teclado nace encendido; al colgarlo de un interruptor, este manda.
+        teclado.setPowered(isOn());
+    }
+
+    public void unlinkTeclado() {
+        PanelTecladoEntity teclado = getLinkedTeclado();
+        if (teclado != null) {
+            teclado.setPowered(true); // suelto vuelve a funcionar por su cuenta
+        }
+        linkedTeclados.clear();
+    }
+
+    public PanelTecladoEntity getLinkedTeclado() {
+        if (linkedTeclados.isEmpty()) return null;
+        Vec3 relPos = linkedTeclados.get(0);
+        Vec3 expectedPos = this.position().add(relPos);
+        List<PanelTecladoEntity> found = this.level().getEntitiesOfClass(PanelTecladoEntity.class,
+                AABB.ofSize(expectedPos, 5, 5, 5),
+                p -> p.position().distanceToSqr(expectedPos) < 1.5);
+        return found.isEmpty() ? null : found.get(0);
+    }
+
     @Override
     public void handleNormalInteract(Player player) {
         if (player.level().isClientSide) return;
@@ -194,6 +225,7 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         Util.saveLinkedList(tag, "LinkedCables", linkedCables);
         Util.saveLinkedList(tag, "LinkedUblablas", linkedUblablas);
         Util.saveLinkedList(tag, "LinkedPanels", linkedPanels);
+        Util.saveLinkedList(tag, "LinkedTeclados", linkedTeclados);
     }
 
     @Override
@@ -206,6 +238,8 @@ public class InterruptorIndustrialEntity extends BaseEntity {
         linkedUblablas.addAll(Util.loadLinkedList(tag, "LinkedUblablas"));
         linkedPanels.clear();
         linkedPanels.addAll(Util.loadLinkedList(tag, "LinkedPanels"));
+        linkedTeclados.clear();
+        linkedTeclados.addAll(Util.loadLinkedList(tag, "LinkedTeclados"));
     }
 
     public static AttributeSupplier.Builder setAttributes() {

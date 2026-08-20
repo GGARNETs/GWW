@@ -1,5 +1,6 @@
 package com.github.razorplay01.command;
 
+import com.github.razorplay01.config.GwwPuzzles;
 import com.github.razorplay01.entity.custom.*;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
@@ -25,6 +26,7 @@ public class EscapeRoomConfigCommand {
 
     private static final String NOT_PANEL_FUSIBLES = "§cLa entidad seleccionada no es un Panel de Fusibles.";
     private static final String NOT_PANEL_CODIGO = "§cLa entidad seleccionada no es un Panel de Código.";
+    private static final String NOT_TECLADO = "§cLa entidad seleccionada no es un Teclado Numérico.";
     private static final String NOT_PUERTA_METALICA = "§cLa segunda entidad debe ser una Puerta Metálica.";
     private static final String NOT_TORTUGA = "§cLa segunda entidad debe ser una Luz Tortuga.";
     private static final String NOT_INTERRUPTOR = "§cLa entidad seleccionada no es un Interruptor Industrial.";
@@ -39,7 +41,8 @@ public class EscapeRoomConfigCommand {
     private static final String SUCCESS_UNLINK_ALL = "§aTodas las vinculaciones han sido eliminadas.";
 
     private static final SuggestionProvider<CommandSourceStack> FUSE_COLORS =
-            (context, builder) -> SharedSuggestionProvider.suggest(new String[]{"rojo", "verde", "azul"}, builder);
+            (context, builder) -> SharedSuggestionProvider.suggest(
+                    new String[]{"rojo", "verde", "azul", "amarillo", "violeta"}, builder);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("escaperoom")
@@ -70,7 +73,9 @@ public class EscapeRoomConfigCommand {
                                                         .then(Commands.argument("color1", StringArgumentType.word()).suggests(FUSE_COLORS)
                                                                 .then(Commands.argument("color2", StringArgumentType.word()).suggests(FUSE_COLORS)
                                                                         .then(Commands.argument("color3", StringArgumentType.word()).suggests(FUSE_COLORS)
-                                                                                .executes(EscapeRoomConfigCommand::setPanelSolution)
+                                                                                .then(Commands.argument("color4", StringArgumentType.word()).suggests(FUSE_COLORS)
+                                                                                        .executes(EscapeRoomConfigCommand::setPanelSolution)
+                                                                                )
                                                                         )
                                                                 )
                                                         )
@@ -143,6 +148,14 @@ public class EscapeRoomConfigCommand {
                                         )
                                         .then(Commands.literal("unlink_panel")
                                                 .executes(EscapeRoomConfigCommand::unlinkPanelFromInterruptor)
+                                        )
+                                        .then(Commands.literal("link_teclado")
+                                                .then(Commands.argument("teclado", EntityArgument.entity())
+                                                        .executes(EscapeRoomConfigCommand::linkTecladoToInterruptor)
+                                                )
+                                        )
+                                        .then(Commands.literal("unlink_teclado")
+                                                .executes(EscapeRoomConfigCommand::unlinkTecladoFromInterruptor)
                                         )
                                         .then(Commands.literal("list")
                                                 .executes(EscapeRoomConfigCommand::listInterruptorLinks)
@@ -225,6 +238,59 @@ public class EscapeRoomConfigCommand {
                                         )
                                         .then(Commands.literal("list")
                                                 .executes(EscapeRoomConfigCommand::listCodigoPanelDoors)
+                                        )
+                                )
+                        )
+                        // ========== CABLES / VALVULAS (orden del yml) ==========
+                        .then(Commands.literal("cables")
+                                .then(Commands.literal("list")
+                                        .executes(ctx -> listRoomCables(ctx, 30))
+                                        .then(Commands.argument("radio", IntegerArgumentType.integer(5, 100))
+                                                .executes(ctx -> listRoomCables(ctx,
+                                                        IntegerArgumentType.getInteger(ctx, "radio")))
+                                        )
+                                )
+                        )
+                        .then(Commands.literal("valvulas")
+                                .then(Commands.literal("list")
+                                        .executes(ctx -> listRoomValvulas(ctx, 30))
+                                        .then(Commands.argument("radio", IntegerArgumentType.integer(5, 100))
+                                                .executes(ctx -> listRoomValvulas(ctx,
+                                                        IntegerArgumentType.getInteger(ctx, "radio")))
+                                        )
+                                )
+                        )
+                        // ========== CAJA ==========
+                        .then(Commands.literal("caja")
+                                .then(Commands.argument("caja", EntityArgument.entity())
+                                        .then(Commands.literal("setname")
+                                                .then(Commands.argument("nombre", StringArgumentType.word())
+                                                        .executes(EscapeRoomConfigCommand::setCajaName)
+                                                )
+                                        )
+                                )
+                        )
+                        // ========== TECLADO ==========
+                        .then(Commands.literal("teclado")
+                                .then(Commands.argument("teclado", EntityArgument.entity())
+                                        .then(Commands.literal("setname")
+                                                .then(Commands.argument("nombre", StringArgumentType.word())
+                                                        .executes(EscapeRoomConfigCommand::setTecladoName)
+                                                )
+                                        )
+                                        .then(Commands.literal("link")
+                                                .then(Commands.argument("puerta", EntityArgument.entity())
+                                                        .executes(EscapeRoomConfigCommand::linkDoorToTeclado)
+                                                )
+                                        )
+                                        .then(Commands.literal("unlink")
+                                                .executes(EscapeRoomConfigCommand::unlinkAllDoorsFromTeclado)
+                                        )
+                                        .then(Commands.literal("info")
+                                                .executes(EscapeRoomConfigCommand::tecladoInfo)
+                                        )
+                                        .then(Commands.literal("reset")
+                                                .executes(EscapeRoomConfigCommand::resetTeclado)
                                         )
                                 )
                         )
@@ -409,25 +475,26 @@ public class EscapeRoomConfigCommand {
             if (panel == null) return 0;
             int puzzleId = IntegerArgumentType.getInteger(context, "puzzleId");
 
-            int[] solution = new int[3];
-            String[] argNames = {"color1", "color2", "color3"};
-            for (int i = 0; i < 3; i++) {
+            int[] solution = new int[4];
+            String[] argNames = {"color1", "color2", "color3", "color4"};
+            for (int i = 0; i < 4; i++) {
                 String color = StringArgumentType.getString(context, argNames[i]);
                 int fuse = parseFuseColor(color);
                 if (fuse == PanelFusiblesEntity.FUSE_NONE) {
-                    sendFailure(context, "§cColor inválido: '" + color + "'. Usa rojo, verde o azul.");
+                    sendFailure(context, "§cColor inválido: '" + color
+                            + "'. Usa rojo, verde, azul, amarillo o violeta.");
                     return 0;
                 }
                 solution[i] = fuse;
             }
 
             panel.setSolution(puzzleId, solution);
-            int baseSlot = (puzzleId == 1) ? 1 : 4;
-            sendSuccess(context, String.format("§a✓ Solución del Puzzle %d: slot %d = %s, slot %d = %s, slot %d = %s",
-                    puzzleId,
-                    baseSlot, PanelFusiblesEntity.getColorName(solution[0]),
-                    baseSlot + 1, PanelFusiblesEntity.getColorName(solution[1]),
-                    baseSlot + 2, PanelFusiblesEntity.getColorName(solution[2])));
+            sendSuccess(context, "§a✓ Solución de respaldo del circuito " + puzzleId + ": "
+                    + formatSolution(solution));
+            if (com.github.razorplay01.config.GwwPuzzles.fusiblesCircuito(puzzleId) != null) {
+                sendInfo(context, "§eOjo: puzzles.yml define este circuito, así que el yml manda. "
+                        + "Este valor solo se usa si borras esa sección.");
+            }
             return 1;
         } catch (Exception e) {
             sendFailure(context, "§cError: " + e.getMessage());
@@ -440,14 +507,21 @@ public class EscapeRoomConfigCommand {
             case "rojo" -> PanelFusiblesEntity.FUSE_ROJO;
             case "verde" -> PanelFusiblesEntity.FUSE_VERDE;
             case "azul" -> PanelFusiblesEntity.FUSE_AZUL;
+            case "amarillo" -> PanelFusiblesEntity.FUSE_AMARILLO;
+            case "violeta" -> PanelFusiblesEntity.FUSE_VIOLETA;
             default -> PanelFusiblesEntity.FUSE_NONE;
         };
     }
 
     private static String formatSolution(int[] solution) {
-        return PanelFusiblesEntity.getColorName(solution[0]) + ", "
-                + PanelFusiblesEntity.getColorName(solution[1]) + ", "
-                + PanelFusiblesEntity.getColorName(solution[2]);
+        StringBuilder sb = new StringBuilder();
+        for (int fuse : solution) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(PanelFusiblesEntity.getColorName(fuse));
+        }
+        return sb.toString();
     }
 
     // ==================== CUADRO ====================
@@ -855,6 +929,198 @@ public class EscapeRoomConfigCommand {
             if (panel == null) return 0;
             sendInfo(context, "§6=== Puertas Vinculadas (Panel Código) ===");
             sendInfo(context, "§ePuertas: §f" + panel.getLinkedDoorsCount());
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    // ==================== CABLES / VALVULAS / CAJAS ====================
+
+    /**
+     * Lista los cables alrededor del que ejecuta, en el MISMO orden que usa
+     * puzzles.yml, para poder escribir la lista de rotaciones sin adivinar.
+     */
+    private static int listRoomCables(CommandContext<CommandSourceStack> context, int radio) {
+        var source = context.getSource();
+        var area = new net.minecraft.world.phys.AABB(BlockPos.containing(source.getPosition())).inflate(radio);
+        List<CableEntity> cables = source.getLevel().getEntitiesOfClass(CableEntity.class, area, c -> true);
+        cables.sort(com.github.razorplay01.instance.InstanceManager.roomOrder());
+
+        if (cables.isEmpty()) {
+            sendFailure(context, "§cNo hay cables en un radio de " + radio + " bloques.");
+            return 0;
+        }
+        sendInfo(context, "§6=== Cables en orden de puzzles.yml (radio " + radio + ") ===");
+        for (int i = 0; i < cables.size(); i++) {
+            CableEntity cable = cables.get(i);
+            sendInfo(context, String.format("§e#%d §7(%.0f, %.0f, %.0f) §ftipo %s, rotación %d, correcta %d",
+                    i + 1, cable.getX(), cable.getY(), cable.getZ(),
+                    cable.getCableType() == 0 ? "recto" : "curvo",
+                    cable.getState(), cable.getCorrectState()));
+        }
+        return cables.size();
+    }
+
+    private static int listRoomValvulas(CommandContext<CommandSourceStack> context, int radio) {
+        var source = context.getSource();
+        var area = new net.minecraft.world.phys.AABB(BlockPos.containing(source.getPosition())).inflate(radio);
+        List<ValvulaEntity> valvulas = source.getLevel().getEntitiesOfClass(ValvulaEntity.class, area, v -> true);
+        valvulas.sort(com.github.razorplay01.instance.InstanceManager.roomOrder());
+
+        if (valvulas.isEmpty()) {
+            sendFailure(context, "§cNo hay válvulas en un radio de " + radio + " bloques.");
+            return 0;
+        }
+        sendInfo(context, "§6=== Válvulas en orden de puzzles.yml (radio " + radio + ") ===");
+        for (int i = 0; i < valvulas.size(); i++) {
+            ValvulaEntity valvula = valvulas.get(i);
+            sendInfo(context, String.format("§e#%d §7(%.0f, %.0f, %.0f) §festado %d, correcto %d",
+                    i + 1, valvula.getX(), valvula.getY(), valvula.getZ(),
+                    valvula.getState(), valvula.getCorrectState()));
+        }
+        return valvulas.size();
+    }
+
+    private static int setCajaName(CommandContext<CommandSourceStack> context) {
+        try {
+            Entity entity = EntityArgument.getEntity(context, "caja");
+            if (!(entity instanceof CajaEntity) && !(entity instanceof CajaHerramientasEntity)) {
+                sendFailure(context, "§cLa entidad debe ser una Caja o una Caja de Herramientas.");
+                return 0;
+            }
+            String nombre = StringArgumentType.getString(context, "nombre");
+            entity.setCustomName(Component.literal(nombre));
+            entity.setCustomNameVisible(false);
+
+            if (GwwPuzzles.hasCajaContenido(nombre)) {
+                sendSuccess(context, "§a✓ Caja renombrada a '" + nombre
+                        + "'. §7puzzles.yml le pondrá su contenido en el próximo reset de la sala.");
+            } else {
+                sendSuccess(context, "§a✓ Caja renombrada a '" + nombre + "'.\n"
+                        + "§eAviso: puzzles.yml no tiene una entrada 'cajas." + nombre
+                        + "'; hasta que la agregues conserva su contenido actual.");
+            }
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    // ==================== TECLADO ====================
+
+    private static int setTecladoName(CommandContext<CommandSourceStack> context) {
+        try {
+            PanelTecladoEntity teclado = getEntityOfType(context, "teclado", PanelTecladoEntity.class, NOT_TECLADO);
+            if (teclado == null) return 0;
+            String nombre = StringArgumentType.getString(context, "nombre");
+            teclado.setCustomName(Component.literal(nombre));
+            teclado.setCustomNameVisible(false);
+
+            String code = GwwPuzzles.tecladoCode(nombre);
+            if (code == null) {
+                sendSuccess(context, "§a✓ Teclado renombrado a '" + nombre + "'.\n"
+                        + "§eAviso: puzzles.yml no tiene un codigo para ese nombre; usara 1234 hasta que lo agregues.");
+            } else {
+                sendSuccess(context, "§a✓ Teclado renombrado a '" + nombre
+                        + "' §7(codigo en puzzles.yml: " + code + ")");
+            }
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int linkDoorToTeclado(CommandContext<CommandSourceStack> context) {
+        try {
+            PanelTecladoEntity teclado = getEntityOfType(context, "teclado", PanelTecladoEntity.class, NOT_TECLADO);
+            if (teclado == null) return 0;
+            Entity door = EntityArgument.getEntity(context, "puerta");
+            if (!(door instanceof BaseEntity baseDoor) || !teclado.linkDoor(baseDoor)) {
+                sendFailure(context, "§cLa segunda entidad debe ser una Puerta Metálica o una Puerta del Ático.");
+                return 0;
+            }
+            if (door instanceof PuertaAticoEntity) {
+                sendSuccess(context, "§a✓ Puerta del ático vinculada: ya no acepta la llave, la abre este teclado.");
+            } else {
+                sendSuccess(context, "§a✓ Puerta metálica vinculada al teclado.");
+            }
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int unlinkAllDoorsFromTeclado(CommandContext<CommandSourceStack> context) {
+        try {
+            PanelTecladoEntity teclado = getEntityOfType(context, "teclado", PanelTecladoEntity.class, NOT_TECLADO);
+            if (teclado == null) return 0;
+            teclado.unlinkAllDoors();
+            sendSuccess(context, SUCCESS_UNLINK_ALL + " §7(las puertas de ático vuelven a aceptar la llave)");
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int tecladoInfo(CommandContext<CommandSourceStack> context) {
+        try {
+            PanelTecladoEntity teclado = getEntityOfType(context, "teclado", PanelTecladoEntity.class, NOT_TECLADO);
+            if (teclado == null) return 0;
+            String nombre = teclado.getTecladoName();
+            String code = GwwPuzzles.tecladoCode(nombre);
+            sendInfo(context, "§6=== Teclado Numérico ===");
+            sendInfo(context, "§eNombre: §f" + (nombre.isEmpty() ? "§c(sin nombre)" : nombre));
+            sendInfo(context, "§eCodigo en puzzles.yml: §f" + (code == null ? "§c(no configurado, usa 1234)" : code));
+            sendInfo(context, "§eResuelto: §f" + (teclado.isSolved() ? "sí" : "no")
+                    + " §7| §eEncendido: §f" + (teclado.isPowered() ? "sí" : "no"));
+            sendInfo(context, "§ePuertas vinculadas: §f" + teclado.getLinkedDoorsCount());
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int resetTeclado(CommandContext<CommandSourceStack> context) {
+        try {
+            PanelTecladoEntity teclado = getEntityOfType(context, "teclado", PanelTecladoEntity.class, NOT_TECLADO);
+            if (teclado == null) return 0;
+            teclado.resetPuzzle();
+            sendSuccess(context, "§aTeclado reseteado: el próximo intento usa el codigo actual de puzzles.yml.");
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int linkTecladoToInterruptor(CommandContext<CommandSourceStack> context) {
+        try {
+            InterruptorIndustrialEntity interruptor = getEntityOfType(context, "interruptor", InterruptorIndustrialEntity.class, NOT_INTERRUPTOR);
+            if (interruptor == null) return 0;
+            PanelTecladoEntity teclado = getEntityOfType(context, "teclado", PanelTecladoEntity.class, NOT_TECLADO);
+            if (teclado == null) return 0;
+            interruptor.linkTeclado(teclado);
+            sendSuccess(context, "§a✓ Teclado vinculado: ahora depende del interruptor.");
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int unlinkTecladoFromInterruptor(CommandContext<CommandSourceStack> context) {
+        try {
+            InterruptorIndustrialEntity interruptor = getEntityOfType(context, "interruptor", InterruptorIndustrialEntity.class, NOT_INTERRUPTOR);
+            if (interruptor == null) return 0;
+            interruptor.unlinkTeclado();
+            sendSuccess(context, "§aEnlace con el teclado eliminado: vuelve a funcionar por su cuenta.");
             return 1;
         } catch (Exception e) {
             sendFailure(context, "§cError: " + e.getMessage());

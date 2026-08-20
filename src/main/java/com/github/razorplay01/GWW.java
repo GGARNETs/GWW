@@ -8,6 +8,7 @@ import com.github.razorplay01.client.render.NoiseHudRenderer;
 import com.github.razorplay01.command.EscapeRoomConfigCommand;
 import com.github.razorplay01.command.GwwDebugCommand;
 import com.github.razorplay01.command.NoiseCommand;
+import com.github.razorplay01.config.GwwPuzzles;
 import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.ModEntities;
@@ -117,6 +118,8 @@ public class GWW implements ModInitializer, ClientModInitializer {
         FabricDefaultAttributeRegistry.register(ModEntities.PUERTA_JAULA, PuertaJaulaEntity.setAttributes());
         FabricDefaultAttributeRegistry.register(ModEntities.PANEL_ENERGIA, PanelEnergiaEntity.setAttributes());
         FabricDefaultAttributeRegistry.register(ModEntities.PANEL_CODIGO, PanelCodigoEntity.setAttributes());
+        FabricDefaultAttributeRegistry.register(ModEntities.PANEL_TECLADO, PanelTecladoEntity.setAttributes());
+        FabricDefaultAttributeRegistry.register(ModEntities.NUMERO_PARED, NumeroParedEntity.setAttributes());
         /*ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 if (SingleSlotState.isEnabled(player.getUUID())) {
@@ -139,6 +142,7 @@ public class GWW implements ModInitializer, ClientModInitializer {
         ServerLifecycleEvents.SERVER_STARTING.register(minecraftServer -> {
             server = minecraftServer;
             GwwSettings.load();
+            GwwPuzzles.load();
             InstanceManager.loadAll();
             ArenaManager.load();
             CannonArenaManager.load();
@@ -183,6 +187,8 @@ public class GWW implements ModInitializer, ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.PUERTA_JAULA, PuertaJaulaEntityRenderer::new);
         EntityRendererRegistry.register(ModEntities.PANEL_ENERGIA, PanelEnergiaEntityRenderer::new);
         EntityRendererRegistry.register(ModEntities.PANEL_CODIGO, PanelCodigoEntityRenderer::new);
+        EntityRendererRegistry.register(ModEntities.PANEL_TECLADO, PanelTecladoEntityRenderer::new);
+        EntityRendererRegistry.register(ModEntities.NUMERO_PARED, NumeroParedEntityRenderer::new);
         NoiseHudRenderer.register();
         MinigameBorderRenderer.register();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

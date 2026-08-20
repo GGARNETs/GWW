@@ -28,6 +28,13 @@ public class PuertaAticoEntity extends BaseEntity {
     private static final RawAnimation ANIMATION_IDLE = RawAnimation.begin().thenLoop("animation.idle");
     private static final RawAnimation ANIMATION_OPEN = RawAnimation.begin().thenPlayAndHold("animation.open");
 
+    /**
+     * Con un teclado numérico vinculado, la puerta deja de aceptar la llave: la abre
+     * el teclado. Lo marca el propio teclado al vincularse/desvincularse, y sin
+     * teclado la puerta sigue funcionando con la llave como siempre.
+     */
+    private boolean keypadControlled = false;
+
     public PuertaAticoEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
     }
@@ -46,16 +53,37 @@ public class PuertaAticoEntity extends BaseEntity {
         this.entityData.set(IS_OPEN, open);
     }
 
+    public boolean isKeypadControlled() {
+        return keypadControlled;
+    }
+
+    public void setKeypadControlled(boolean controlled) {
+        this.keypadControlled = controlled;
+    }
+
+    /** Apertura desde el teclado numérico: mismos sonidos y ruido que abrirla con la llave. */
+    public void openFromKeypad() {
+        if (this.level().isClientSide || isOpen()) {
+            return;
+        }
+        setOpen(true);
+        ModSounds.playAt(this, ModSounds.LOCK_OPEN, 0.9F, 0.95F);
+        ModSounds.playAt(this, ModSounds.DOOR_ATTIC_OPEN, 1.0F, 1.0F);
+        NoiseDetectionSystem.addNoiseNearby(this, 20.0D, 1.0f);
+    }
+
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putBoolean("IsOpen", isOpen());
+        tag.putBoolean("KeypadControlled", keypadControlled);
     }
 
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         setOpen(tag.getBoolean("IsOpen"));
+        keypadControlled = tag.getBoolean("KeypadControlled");
     }
 
     public static AttributeSupplier.Builder setAttributes() {
@@ -79,7 +107,12 @@ public class PuertaAticoEntity extends BaseEntity {
     public void handleNormalInteract(Player player) {
         if (!player.level().isClientSide) {
             if (!isOpen()) {
-                if (hasRequiredItem(player)) {
+                if (keypadControlled) {
+                    // La cerradura de llave está anulada: manda el teclado.
+                    ModSounds.playAt(this, ModSounds.BLOCKED_THUD, 0.6F, 0.95F);
+                    player.sendSystemMessage(Component.literal(
+                            "§cLa cerradura está sellada. Un §bteclado §ccontrola esta puerta."));
+                } else if (hasRequiredItem(player)) {
                     consumeRequiredItem(player);
                     setOpen(true);
                     ModSounds.playAt(this, ModSounds.LOCK_OPEN, 0.9F, 0.95F);

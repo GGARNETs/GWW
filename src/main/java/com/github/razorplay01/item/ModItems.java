@@ -20,6 +20,8 @@ public class ModItems {
     public static final Item FUSIBLE_AZUL = register("fusible_azul", new Item(new Item.Properties()));
     public static final Item FUSIBLE_ROJO = register("fusible_rojo", new Item(new Item.Properties()));
     public static final Item FUSIBLE_VERDE = register("fusible_verde", new Item(new Item.Properties()));
+    public static final Item FUSIBLE_AMARILLO = register("fusible_amarillo", new Item(new Item.Properties()));
+    public static final Item FUSIBLE_VIOLETA = register("fusible_violeta", new Item(new Item.Properties()));
     public static final Item GANZUA = register("ganzua", new Item(new Item.Properties()));
     public static final Item HOJA_PISTA = register("hoja_pista", new PistaItem(new Item.Properties()));
     public static final Item LLAVE_ATICO = register("llave_atico", new Item(new Item.Properties()));
@@ -47,6 +49,8 @@ public class ModItems {
             itemGroup.accept(ModItems.FUSIBLE_AZUL);
             itemGroup.accept(ModItems.FUSIBLE_ROJO);
             itemGroup.accept(ModItems.FUSIBLE_VERDE);
+            itemGroup.accept(ModItems.FUSIBLE_AMARILLO);
+            itemGroup.accept(ModItems.FUSIBLE_VIOLETA);
             itemGroup.accept(ModItems.GANZUA);
             itemGroup.accept(ModItems.HOJA_PISTA);
             itemGroup.accept(ModItems.LLAVE_ATICO);

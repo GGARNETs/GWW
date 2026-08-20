@@ -105,6 +105,15 @@ public class CajaEntity extends BaseEntity {
         return boxContents;
     }
 
+    public void setBoxContents(List<ItemStack> contents) {
+        boxContents.clear();
+        for (ItemStack stack : contents) {
+            if (!stack.isEmpty()) {
+                boxContents.add(stack.copy());
+            }
+        }
+    }
+
     public static AttributeSupplier.Builder setAttributes() {
         return PathfinderMob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, Double.POSITIVE_INFINITY);

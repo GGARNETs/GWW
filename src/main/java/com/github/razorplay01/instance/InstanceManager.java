@@ -1,6 +1,8 @@
 package com.github.razorplay01.instance;
 
 import com.github.razorplay01.GWW;
+import com.github.razorplay01.config.GwwPuzzles;
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.*;
 import com.github.razorplay01.entity.custom.util.EscapeRoomPersistable;
 import com.github.razorplay01.instance.Instance.EntitySnapshot;
@@ -24,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -208,6 +211,92 @@ public class InstanceManager {
         reLinkRejas(level, target);
         reLinkDoors(level, target);
         reLinkCodigoPanels(level, target);
+        applyPuzzlesConfig(level, instance, target);
+    }
+
+    // ==================== SOLUCIONES DESDE puzzles.yml ====================
+    // Cables, válvulas y cajas toman su configuración del yml en el momento de
+    // montar la sala: editar el yml + /escaperoom reload deja las soluciones
+    // nuevas listas para el próximo reset, sin re-guardar instances.
+
+    /**
+     * Orden estable de las entidades de una sala, el que usa puzzles.yml: primero
+     * por altura (de abajo a arriba) y a igual altura de oeste a este y de norte a
+     * sur. Todas las salas son clones, así que el orden es idéntico en todas.
+     */
+    public static Comparator<Entity> roomOrder() {
+        return Comparator.<Entity>comparingDouble(Entity::getY)
+                .thenComparingDouble(Entity::getX)
+                .thenComparingDouble(Entity::getZ);
+    }
+
+    private static void applyPuzzlesConfig(ServerLevel level, Instance instance, BlockPos center) {
+        AABB room = new AABB(center).inflate(instance.getRadius() + CLEAR_MARGIN);
+
+        int[] rotaciones = GwwPuzzles.cablesRotaciones();
+        int[] tipos = GwwPuzzles.cablesTipos();
+        if (rotaciones != null || tipos != null) {
+            List<CableEntity> cables = level.getEntitiesOfClass(CableEntity.class, room, c -> true);
+            cables.sort(roomOrder());
+            if (rotaciones != null && !cables.isEmpty() && rotaciones.length != cables.size()) {
+                GWW.LOGGER.warn("[GWW] puzzles.yml trae {} rotaciones de cable pero la sala en {} tiene {} cables.",
+                        rotaciones.length, center.toShortString(), cables.size());
+            }
+            for (int i = 0; i < cables.size(); i++) {
+                if (rotaciones != null && i < rotaciones.length) {
+                    cables.get(i).setCorrectState(rotaciones[i]);
+                }
+                if (tipos != null && i < tipos.length) {
+                    cables.get(i).setCableType(tipos[i]);
+                }
+            }
+            GwwDebug.log(GwwDebug.Category.PUZZLE, "Sala {}: {} cables configurados desde puzzles.yml",
+                    center.toShortString(), cables.size());
+        }
+
+        int[] estados = GwwPuzzles.valvulasEstados();
+        if (estados != null) {
+            List<ValvulaEntity> valvulas = level.getEntitiesOfClass(ValvulaEntity.class, room, v -> true);
+            valvulas.sort(roomOrder());
+            if (!valvulas.isEmpty() && estados.length != valvulas.size()) {
+                GWW.LOGGER.warn("[GWW] puzzles.yml trae {} estados de valvula pero la sala en {} tiene {} valvulas.",
+                        estados.length, center.toShortString(), valvulas.size());
+            }
+            for (int i = 0; i < valvulas.size() && i < estados.length; i++) {
+                valvulas.get(i).setCorrectState(estados[i]);
+            }
+            GwwDebug.log(GwwDebug.Category.PUZZLE, "Sala {}: {} valvulas configuradas desde puzzles.yml",
+                    center.toShortString(), valvulas.size());
+        }
+
+        int cajasConfiguradas = 0;
+        for (CajaEntity caja : level.getEntitiesOfClass(CajaEntity.class, room, c -> true)) {
+            if (applyCajaContents(caja.getCustomName(), caja::setBoxContents)) {
+                cajasConfiguradas++;
+            }
+        }
+        for (CajaHerramientasEntity caja : level.getEntitiesOfClass(CajaHerramientasEntity.class, room, c -> true)) {
+            if (applyCajaContents(caja.getCustomName(), caja::setBoxContents)) {
+                cajasConfiguradas++;
+            }
+        }
+        if (cajasConfiguradas > 0) {
+            GwwDebug.log(GwwDebug.Category.PUZZLE, "Sala {}: {} cajas llenadas desde puzzles.yml",
+                    center.toShortString(), cajasConfiguradas);
+        }
+    }
+
+    private static boolean applyCajaContents(net.minecraft.network.chat.Component customName,
+                                             java.util.function.Consumer<List<net.minecraft.world.item.ItemStack>> setter) {
+        if (customName == null) {
+            return false;
+        }
+        String name = customName.getString();
+        if (!GwwPuzzles.hasCajaContenido(name)) {
+            return false;
+        }
+        setter.accept(GwwPuzzles.cajaContenido(name));
+        return true;
     }
 
     // ==================== RE-ENLAZADO DE PUZZLES ====================
@@ -231,10 +320,7 @@ public class InstanceManager {
         if (solved) {
             return 2;
         }
-        boolean allFilled = (puzzleId == 1)
-                ? (panel.hasSlot(0) && panel.hasSlot(1) && panel.hasSlot(2))
-                : (panel.hasSlot(3) && panel.hasSlot(4) && panel.hasSlot(5));
-        return allFilled ? 1 : 0;
+        return panel.areAllSlotsFilled(puzzleId) ? 1 : 0;
     }
 
     private static void reLinkInterruptors(ServerLevel level, BlockPos center) {
@@ -244,6 +330,7 @@ public class InstanceManager {
         List<CableEntity> allCables = level.getEntitiesOfClass(CableEntity.class, area, c -> true);
         List<UblablaEntity> allUblablas = level.getEntitiesOfClass(UblablaEntity.class, area, u -> true);
         List<PanelCodigoEntity> allPanels = level.getEntitiesOfClass(PanelCodigoEntity.class, area, p -> true);
+        List<PanelTecladoEntity> allTeclados = level.getEntitiesOfClass(PanelTecladoEntity.class, area, p -> true);
 
         for (InterruptorIndustrialEntity interruptor : interruptors) {
             List<Vec3> savedCables = new ArrayList<>(interruptor.getLinkedCables());
@@ -257,12 +344,19 @@ public class InstanceManager {
 
             reLinkSingle(interruptor.getLinkedUblablas(), interruptor.position(), allUblablas);
             reLinkSingle(interruptor.getLinkedPanels(), interruptor.position(), allPanels);
+            reLinkSingle(interruptor.getLinkedTeclados(), interruptor.position(), allTeclados);
 
             if (interruptor.isOn()) {
                 PanelCodigoEntity panel = interruptor.getLinkedPanel();
                 if (panel != null) {
                     panel.setPowered(true);
                 }
+            }
+            // El teclado nace encendido: con interruptor vinculado, este manda en
+            // ambos sentidos (apagado incluido).
+            PanelTecladoEntity teclado = interruptor.getLinkedTeclado();
+            if (teclado != null) {
+                teclado.setPowered(interruptor.isOn());
             }
         }
     }
