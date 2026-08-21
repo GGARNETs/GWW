@@ -7,9 +7,11 @@ import com.github.razorplay01.arena.EscapeRoomController;
 import com.github.razorplay01.config.GwwPuzzles;
 import com.github.razorplay01.config.GwwSettings;
 import com.github.razorplay01.debug.GwwDebug;
+import com.github.razorplay01.entity.custom.CableEntity;
 import com.github.razorplay01.entity.custom.CajaEntity;
 import com.github.razorplay01.entity.custom.CajaHerramientasEntity;
 import com.github.razorplay01.entity.custom.UblablaEntity;
+import com.github.razorplay01.entity.custom.ValvulaEntity;
 import com.github.razorplay01.instance.ChunkPreloader;
 import com.github.razorplay01.instance.Instance;
 import com.github.razorplay01.instance.InstanceManager;
@@ -554,8 +556,8 @@ public class EscapeRoomCommands {
         return 1;
     }
 
-    /** Radio alrededor de quien recarga en el que se cierran las cajas para poder reprobarlas. */
-    private static final double RELOAD_CAJAS_RADIUS = 64.0;
+    /** Radio alrededor de quien recarga en el que se reinician los puzzles para reprobarlos. */
+    private static final double RELOAD_RESET_RADIUS = 64.0;
 
     private static int reload(CommandContext<CommandSourceStack> context, boolean allCajas) {
         CommandSourceStack source = context.getSource();
@@ -577,51 +579,64 @@ public class EscapeRoomCommands {
                 ? "§7Sin cajas configuradas en puzzles.yml."
                 : "§7Cajas en puzzles.yml (" + cajas.size() + "): §f" + String.join("§7, §f", cajas)), false);
 
-        int cerradas = resetCajas(source, allCajas);
-        if (cerradas >= 0) {
-            source.sendSuccess(() -> Component.literal("§7" + cerradas + " caja(s) cerradas"
-                    + (allCajas ? " en todo el mundo." : " en " + (int) RELOAD_CAJAS_RADIUS + " bloques.")), false);
-        }
+        resetPuzzleEntities(source, allCajas);
         return errors.isEmpty() ? 1 : 0;
     }
 
     /**
-     * Cierra las cajas para poder volver a probarlas tras editar el yml. Por defecto
-     * solo las de alrededor: cerrar las de todo el mundo con salas en partida dejaría
-     * a los equipos reabrir sus cajas y duplicar lo que ya recogieron. Devuelve -1 si
-     * no había dónde buscar.
+     * Deja los puzzles manipulables como recién montados para poder reprobarlos tras
+     * editar el yml: cajas cerradas, cables desenchufados y válvulas sin manivela en
+     * el estado 0. Por defecto solo los de alrededor: hacerlo en todo el mundo con
+     * salas en partida les desharía el avance a los equipos y les dejaría reabrir sus
+     * cajas para duplicar items.
      */
-    private static int resetCajas(CommandSourceStack source, boolean all) {
+    private static void resetPuzzleEntities(CommandSourceStack source, boolean all) {
         ServerLevel level = source.getLevel();
         List<CajaEntity> cajas;
         List<CajaHerramientasEntity> herramientas;
+        List<CableEntity> cables;
+        List<ValvulaEntity> valvulas;
 
         if (all) {
             source.sendSuccess(() -> Component.literal(
-                    "§eCerrando TODAS las cajas: si hay salas en partida, sus equipos pueden"
-                            + " volver a abrirlas y duplicar items."), true);
+                    "§eReiniciando los puzzles de TODO el mundo: las salas en partida pierden"
+                            + " su avance y pueden reabrir cajas para duplicar items."), true);
             cajas = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(CajaEntity.class), c -> true));
             herramientas = new ArrayList<>(
                     level.getEntities(EntityTypeTest.forClass(CajaHerramientasEntity.class), c -> true));
+            cables = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(CableEntity.class), c -> true));
+            valvulas = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(ValvulaEntity.class), v -> true));
         } else {
             Entity executor = source.getEntity();
             if (executor == null) {
                 source.sendSuccess(() -> Component.literal(
-                        "§7Cajas sin tocar: desde consola no hay posición. Usa §f/escaperoom reload all§7."), false);
-                return -1;
+                        "§7Puzzles sin tocar: desde consola no hay posición. Usa §f/escaperoom reload all§7."), false);
+                return;
             }
-            AABB area = executor.getBoundingBox().inflate(RELOAD_CAJAS_RADIUS);
+            AABB area = executor.getBoundingBox().inflate(RELOAD_RESET_RADIUS);
             cajas = level.getEntitiesOfClass(CajaEntity.class, area, c -> true);
             herramientas = level.getEntitiesOfClass(CajaHerramientasEntity.class, area, c -> true);
+            cables = level.getEntitiesOfClass(CableEntity.class, area, c -> true);
+            valvulas = level.getEntitiesOfClass(ValvulaEntity.class, area, v -> true);
         }
 
         cajas.forEach(CajaEntity::reset);
         herramientas.forEach(CajaHerramientasEntity::reset);
+        cables.forEach(cable -> {
+            cable.setActive(false);
+            cable.setState(0);
+        });
+        valvulas.forEach(valvula -> {
+            valvula.setHasManivela(false);
+            valvula.setState(0);
+        });
 
-        int total = cajas.size() + herramientas.size();
-        GwwDebug.log(GwwDebug.Category.PUZZLE, "Reload: {} cajas cerradas ({})",
-                total, all ? "todo el mundo" : "radio " + RELOAD_CAJAS_RADIUS);
-        return total;
+        int totalCajas = cajas.size() + herramientas.size();
+        source.sendSuccess(() -> Component.literal("§7Reiniciados: §f" + totalCajas + "§7 caja(s), §f"
+                + cables.size() + "§7 cable(s), §f" + valvulas.size() + "§7 valvula(s)"
+                + (all ? " en todo el mundo." : " en " + (int) RELOAD_RESET_RADIUS + " bloques.")), false);
+        GwwDebug.log(GwwDebug.Category.PUZZLE, "Reload: {} cajas, {} cables y {} valvulas reiniciados ({})",
+                totalCajas, cables.size(), valvulas.size(), all ? "todo el mundo" : "radio " + RELOAD_RESET_RADIUS);
     }
 
     // ==================== ARENAS (config/GWW/config.yml) ====================
