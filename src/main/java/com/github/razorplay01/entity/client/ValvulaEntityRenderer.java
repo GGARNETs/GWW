@@ -17,4 +17,10 @@ public class ValvulaEntityRenderer extends GeoEntityRenderer<ValvulaEntity> {
                 }
         ));
     }
+
+    /** El nombre es solo la clave de puzzles.yml: nunca se dibuja como cartel. */
+    @Override
+    public boolean shouldShowName(ValvulaEntity entity) {
+        return false;
+    }
 }

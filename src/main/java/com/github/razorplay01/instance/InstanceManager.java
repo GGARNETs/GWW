@@ -259,18 +259,26 @@ public class InstanceManager {
         }
 
         int[] estados = GwwPuzzles.valvulasEstados();
-        if (estados != null) {
-            List<ValvulaEntity> valvulas = level.getEntitiesOfClass(ValvulaEntity.class, room, v -> true);
-            valvulas.sort(roomOrder());
-            if (!valvulas.isEmpty() && estados.length != valvulas.size()) {
-                GWW.LOGGER.warn("[GWW] puzzles.yml trae {} estados de valvula pero la sala en {} tiene {} valvulas.",
-                        estados.length, center.toShortString(), valvulas.size());
-            }
-            for (int i = 0; i < valvulas.size() && i < estados.length; i++) {
+        List<ValvulaEntity> valvulas = level.getEntitiesOfClass(ValvulaEntity.class, room, v -> true);
+        valvulas.sort(roomOrder());
+        if (estados != null && !valvulas.isEmpty() && estados.length != valvulas.size()) {
+            GWW.LOGGER.warn("[GWW] puzzles.yml trae {} estados de valvula pero la sala en {} tiene {} valvulas.",
+                    estados.length, center.toShortString(), valvulas.size());
+        }
+        int valvulasConfiguradas = 0;
+        for (int i = 0; i < valvulas.size(); i++) {
+            // El nombre manda sobre el orden: una válvula nombrada toma su estado del
+            // yml sin importar dónde caiga en la sala.
+            if (applyValvulaConfig(valvulas.get(i))) {
+                valvulasConfiguradas++;
+            } else if (estados != null && i < estados.length) {
                 valvulas.get(i).setCorrectState(estados[i]);
+                valvulasConfiguradas++;
             }
+        }
+        if (valvulasConfiguradas > 0) {
             GwwDebug.log(GwwDebug.Category.PUZZLE, "Sala {}: {} valvulas configuradas desde puzzles.yml",
-                    center.toShortString(), valvulas.size());
+                    center.toShortString(), valvulasConfiguradas);
         }
 
         int cajasConfiguradas = 0;
@@ -288,6 +296,24 @@ public class InstanceManager {
             GwwDebug.log(GwwDebug.Category.PUZZLE, "Sala {}: {} cajas llenadas desde puzzles.yml",
                     center.toShortString(), cajasConfiguradas);
         }
+    }
+
+    /**
+     * Graba en la válvula el estado correcto que puzzles.yml tenga para su nombre.
+     * Queda guardado en la entidad: no se vuelve a consultar el yml hasta el próximo
+     * /escaperoom reload. Devuelve false si no tiene nombre o el yml no la nombra.
+     */
+    public static boolean applyValvulaConfig(ValvulaEntity valvula) {
+        Component customName = valvula.getCustomName();
+        if (customName == null) {
+            return false;
+        }
+        Integer estado = GwwPuzzles.valvulaEstado(customName.getString());
+        if (estado == null) {
+            return false;
+        }
+        valvula.setCorrectState(estado);
+        return true;
     }
 
     /**

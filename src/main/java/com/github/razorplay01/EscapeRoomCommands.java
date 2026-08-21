@@ -579,8 +579,43 @@ public class EscapeRoomCommands {
                 ? "§7Sin cajas configuradas en puzzles.yml."
                 : "§7Cajas en puzzles.yml (" + cajas.size() + "): §f" + String.join("§7, §f", cajas)), false);
 
+        applyValvulasFromConfig(source);
         resetPuzzleEntities(source, allCajas);
         return errors.isEmpty() ? 1 : 0;
+    }
+
+    /**
+     * Graba el estado correcto del yml en cada válvula NOMBRADA del mundo. Se hace una
+     * sola vez, aquí: la válvula se queda con el número guardado y no vuelve a mirar el
+     * yml mientras juega. Va a todas las salas y no solo a las de alrededor porque al ir
+     * por nombre no hay riesgo de cruzar válvulas de salas vecinas, y cambiar la solución
+     * no le deshace el avance a nadie.
+     */
+    private static void applyValvulasFromConfig(CommandSourceStack source) {
+        List<String> nombres = GwwPuzzles.valvulaNames();
+        if (nombres.isEmpty()) {
+            return;
+        }
+
+        List<ValvulaEntity> valvulas = new ArrayList<>(
+                source.getLevel().getEntities(EntityTypeTest.forClass(ValvulaEntity.class), v -> true));
+        int aplicadas = 0;
+        int sinNombre = 0;
+        for (ValvulaEntity valvula : valvulas) {
+            if (InstanceManager.applyValvulaConfig(valvula)) {
+                aplicadas++;
+            } else if (valvula.getCustomName() == null) {
+                sinNombre++;
+            }
+        }
+
+        int total = aplicadas;
+        int huerfanas = sinNombre;
+        source.sendSuccess(() -> Component.literal("§7Valvulas en puzzles.yml (" + nombres.size() + "): §f"
+                + String.join("§7, §f", nombres) + "§7 → aplicadas a §f" + total + "§7 valvula(s)"
+                + (huerfanas > 0 ? " §e(" + huerfanas + " sin nombre, sin configurar)" : "")), false);
+        GwwDebug.log(GwwDebug.Category.PUZZLE, "Reload: {} valvulas configuradas por nombre, {} sin nombre",
+                total, huerfanas);
     }
 
     /**

@@ -225,6 +225,11 @@ public class EscapeRoomConfigCommand {
                                                         .executes(EscapeRoomConfigCommand::setValvulaCorrectState)
                                                 )
                                         )
+                                        .then(Commands.literal("setname")
+                                                .then(Commands.argument("nombre", StringArgumentType.word())
+                                                        .executes(EscapeRoomConfigCommand::setValvulaName)
+                                                )
+                                        )
                                         .then(Commands.literal("info")
                                                 .executes(EscapeRoomConfigCommand::valvulaInfo)
                                         )
@@ -894,11 +899,35 @@ public class EscapeRoomConfigCommand {
         return 1;
     }
 
+    /** Nombre con el que la válvula busca su estado correcto en puzzles.yml. */
+    private static int setValvulaName(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ValvulaEntity valvula = getEntityOfType(ctx, "valvula", ValvulaEntity.class, NOT_VALVULA);
+        if (valvula == null) return 0;
+
+        String nombre = StringArgumentType.getString(ctx, "nombre");
+        valvula.setCustomName(Component.literal(nombre));
+        valvula.setCustomNameVisible(false);
+
+        Integer estado = GwwPuzzles.valvulaEstado(nombre);
+        if (estado != null) {
+            valvula.setCorrectState(estado);
+            sendSuccess(ctx, "§a✓ Válvula renombrada a '" + nombre + "' y puesta en estado correcto §f"
+                    + estado + "§a desde puzzles.yml.");
+        } else {
+            sendSuccess(ctx, "§a✓ Válvula renombrada a '" + nombre + "'.\n"
+                    + "§eAviso: puzzles.yml no tiene 'valvulas." + nombre
+                    + "'; conserva su estado correcto actual (" + valvula.getCorrectState() + ").");
+        }
+        return 1;
+    }
+
     private static int valvulaInfo(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ValvulaEntity valvula = getEntityOfType(ctx, "valvula", ValvulaEntity.class, NOT_VALVULA);
         if (valvula == null) return 0;
 
+        String nombre = valvula.getCustomName() == null ? null : valvula.getCustomName().getString();
         sendInfo(ctx, "§6=== Válvula " + valvula.getValType().name() + " ===");
+        sendInfo(ctx, "§eNombre: " + (nombre == null ? "§c(sin nombre: puzzles.yml no puede configurarla)" : "§f" + nombre));
         sendInfo(ctx, "§eManivela: " + (valvula.hasManivela() ? "§apuesta" : "§cno tiene (no gira)"));
         sendInfo(ctx, "§eEstado actual: §f" + valvula.getState() + "§7/" + ValvulaEntity.MAX_STATE);
         sendInfo(ctx, "§eEstado correcto: §f" + valvula.getCorrectState() + "§7/" + ValvulaEntity.MAX_STATE);

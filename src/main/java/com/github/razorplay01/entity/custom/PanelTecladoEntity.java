@@ -363,11 +363,15 @@ public class PanelTecladoEntity extends BaseEntity implements GeckoLibMultiPartE
         }
     }
 
-    /** Progreso enmascarado del intento: "§7[* * _ _]". Cuántos van, nunca cuáles. */
+    /**
+     * Progreso del intento: "§7[4 7 _ _]". Se ven los dígitos tecleados para que el
+     * equipo note al momento si se equivocó al pulsar, todos del mismo color: marcar
+     * los aciertos delataría el código tecla a tecla.
+     */
     private String progressLine(int codeLength) {
         StringBuilder sb = new StringBuilder("§7[");
         for (int i = 0; i < codeLength; i++) {
-            sb.append(i < currentInput.length() ? '*' : '_');
+            sb.append(i < currentInput.length() ? currentInput.charAt(i) : '_');
             if (i < codeLength - 1) {
                 sb.append(' ');
             }

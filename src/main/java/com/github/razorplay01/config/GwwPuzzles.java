@@ -56,6 +56,7 @@ public class GwwPuzzles {
     private static int[] cablesRotaciones = null;
     private static int[] cablesTipos = null;
     private static int[] valvulasEstados = null;
+    private static Map<String, Integer> valvulasPorNombre = new LinkedHashMap<>();
     private static Map<String, CajaConfig> cajasContenido = new LinkedHashMap<>();
 
     /**
@@ -113,9 +114,17 @@ public class GwwPuzzles {
             #  #tipos: [recto, curvo, recto, curvo]
 
             #valvulas:
-            #  # Estado correcto de cada valvula (0 = cerrada .. 4 = abierta),
-            #  # en orden. Mismo criterio de orden que los cables.
-            #  estados_correctos: [3, 3, 3]
+            #  # Cada valvula por su NOMBRE, con el estado en el que corta la
+            #  # presion (0 = cerrada .. 4 = abierta).
+            #  # Ponle nombre con: /escaperoom config valvula <entidad> setname <nombre>
+            #  # Se graba en la valvula al hacer /escaperoom reload.
+            #  valvula_patio: 3
+            #  valvula_taller: 1
+            #  valvula_sotano: 4
+            #
+            #  # Alternativa vieja, por orden en la sala en vez de por nombre
+            #  # (mismo criterio de orden que los cables). El nombre manda sobre esto.
+            #  #estados_correctos: [3, 3, 3]
 
             #cajas:
             #  # Contenido de cada caja, identificada por su nombre.
@@ -213,6 +222,24 @@ public class GwwPuzzles {
 
             if (root.get("valvulas") instanceof Map<?, ?> valvulas) {
                 valvulasEstados = intList(valvulas, "estados_correctos", 0, 4, valvulasEstados, errors);
+
+                // Además de la lista posicional de siempre, cada clave suelta es el
+                // nombre de una válvula: es lo que evita depender del orden en la sala.
+                Map<String, Integer> porNombre = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : valvulas.entrySet()) {
+                    String name = String.valueOf(entry.getKey());
+                    if (name.equals("estados_correctos")) {
+                        continue;
+                    }
+                    if (!(entry.getValue() instanceof Number number)
+                            || number.intValue() < 0 || number.intValue() > 4) {
+                        errors.add("puzzles.yml: la valvula '" + name + "' debe llevar un numero de 0"
+                                + " (cerrada) a 4 (abierta), no '" + entry.getValue() + "'.");
+                        continue;
+                    }
+                    porNombre.put(name, number.intValue());
+                }
+                valvulasPorNombre = porNombre;
             }
 
             if (root.get("cajas") instanceof Map<?, ?> cajas) {
@@ -520,6 +547,15 @@ public class GwwPuzzles {
     /** Estados correctos de las válvulas de la sala, en orden, o null. */
     public static synchronized int[] valvulasEstados() {
         return valvulasEstados == null ? null : valvulasEstados.clone();
+    }
+
+    /** Estado correcto de una válvula por su nombre, o null si el yml no la nombra. */
+    public static synchronized Integer valvulaEstado(String name) {
+        return name == null || name.isEmpty() ? null : valvulasPorNombre.get(name);
+    }
+
+    public static synchronized List<String> valvulaNames() {
+        return new ArrayList<>(valvulasPorNombre.keySet());
     }
 
     // ==================== CAJAS ====================
