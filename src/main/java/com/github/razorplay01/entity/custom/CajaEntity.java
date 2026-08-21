@@ -1,8 +1,10 @@
 package com.github.razorplay01.entity.custom;
 
 import com.github.razorplay01.GWW;
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.ModEntities;
 import com.github.razorplay01.entity.custom.util.NearbyPlayers;
+import com.github.razorplay01.instance.InstanceManager;
 import com.github.razorplay01.item.ModItems;
 import com.github.razorplay01.sound.ModSounds;
 import com.github.razorplay01.system.NoiseDetectionSystem;
@@ -177,6 +179,23 @@ public class CajaEntity extends BaseEntity {
 
     private void spawnBoxContents() {
         if (this.level().isClientSide) return;
+
+        // El yml se relee justo aquí, no al montar la sala: así editar puzzles.yml y
+        // hacer /escaperoom reload se nota en la próxima caja que se abra, sin tener
+        // que resetear la sala ni tocar caja por caja.
+        InstanceManager.applyCajaConfig(this);
+
+        String name = this.getCustomName() == null ? "(sin nombre)" : this.getCustomName().getString();
+        GwwDebug.log(GwwDebug.Category.PUZZLE, "Caja '{}' en {} suelta {} item(s){}",
+                name, this.blockPosition().toShortString(), boxContents.size(),
+                spawnNbt.contains("id") ? " + " + spawnNbt.getString("id") : "");
+
+        if (boxContents.isEmpty() && !spawnNbt.contains("id")) {
+            GWW.LOGGER.warn("[GWW] La caja '{}' en {} se abrio vacia: no tiene entidad en su NBT"
+                            + " y puzzles.yml no trae una entrada 'cajas.{}'.",
+                    name, this.blockPosition().toShortString(), name);
+            return;
+        }
 
         // Entidad e items no se excluyen: una caja puede soltar la manivela y,
         // junto a ella, la pista que dice qué hacer con esa manivela.

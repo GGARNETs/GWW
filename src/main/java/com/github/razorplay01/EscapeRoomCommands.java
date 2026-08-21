@@ -6,6 +6,9 @@ import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.arena.EscapeRoomController;
 import com.github.razorplay01.config.GwwPuzzles;
 import com.github.razorplay01.config.GwwSettings;
+import com.github.razorplay01.debug.GwwDebug;
+import com.github.razorplay01.entity.custom.CajaEntity;
+import com.github.razorplay01.entity.custom.CajaHerramientasEntity;
 import com.github.razorplay01.entity.custom.UblablaEntity;
 import com.github.razorplay01.instance.ChunkPreloader;
 import com.github.razorplay01.instance.Instance;
@@ -22,8 +25,12 @@ import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.entity.EntityTypeTest;
+import net.minecraft.world.phys.AABB;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -183,7 +190,10 @@ public class EscapeRoomCommands {
 
                 // Recargar instances y arenas desde el disco
                 .then(Commands.literal("reload")
-                        .executes(EscapeRoomCommands::reload)
+                        .executes(ctx -> reload(ctx, false))
+                        .then(Commands.literal("all")
+                                .executes(ctx -> reload(ctx, true))
+                        )
                 )
 
                 // Gestión de arenas (config/GWW/config.yml)
@@ -544,7 +554,10 @@ public class EscapeRoomCommands {
         return 1;
     }
 
-    private static int reload(CommandContext<CommandSourceStack> context) {
+    /** Radio alrededor de quien recarga en el que se cierran las cajas para poder reprobarlas. */
+    private static final double RELOAD_CAJAS_RADIUS = 64.0;
+
+    private static int reload(CommandContext<CommandSourceStack> context, boolean allCajas) {
         CommandSourceStack source = context.getSource();
 
         List<String> errors = InstanceManager.loadAll();
@@ -556,7 +569,59 @@ public class EscapeRoomCommands {
         source.sendSuccess(() -> Component.literal(
                 "§aRecargado: " + InstanceManager.getNames().size() + " instances, "
                         + ArenaManager.getAll().size() + " arenas, settings.yml y puzzles.yml."), true);
+
+        // Ver los nombres que quedaron cargados evita la duda de si el yml se leyó
+        // bien: una caja que no aparece aquí es un error de escritura, no del mod.
+        List<String> cajas = GwwPuzzles.cajaNames();
+        source.sendSuccess(() -> Component.literal(cajas.isEmpty()
+                ? "§7Sin cajas configuradas en puzzles.yml."
+                : "§7Cajas en puzzles.yml (" + cajas.size() + "): §f" + String.join("§7, §f", cajas)), false);
+
+        int cerradas = resetCajas(source, allCajas);
+        if (cerradas >= 0) {
+            source.sendSuccess(() -> Component.literal("§7" + cerradas + " caja(s) cerradas"
+                    + (allCajas ? " en todo el mundo." : " en " + (int) RELOAD_CAJAS_RADIUS + " bloques.")), false);
+        }
         return errors.isEmpty() ? 1 : 0;
+    }
+
+    /**
+     * Cierra las cajas para poder volver a probarlas tras editar el yml. Por defecto
+     * solo las de alrededor: cerrar las de todo el mundo con salas en partida dejaría
+     * a los equipos reabrir sus cajas y duplicar lo que ya recogieron. Devuelve -1 si
+     * no había dónde buscar.
+     */
+    private static int resetCajas(CommandSourceStack source, boolean all) {
+        ServerLevel level = source.getLevel();
+        List<CajaEntity> cajas;
+        List<CajaHerramientasEntity> herramientas;
+
+        if (all) {
+            source.sendSuccess(() -> Component.literal(
+                    "§eCerrando TODAS las cajas: si hay salas en partida, sus equipos pueden"
+                            + " volver a abrirlas y duplicar items."), true);
+            cajas = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(CajaEntity.class), c -> true));
+            herramientas = new ArrayList<>(
+                    level.getEntities(EntityTypeTest.forClass(CajaHerramientasEntity.class), c -> true));
+        } else {
+            Entity executor = source.getEntity();
+            if (executor == null) {
+                source.sendSuccess(() -> Component.literal(
+                        "§7Cajas sin tocar: desde consola no hay posición. Usa §f/escaperoom reload all§7."), false);
+                return -1;
+            }
+            AABB area = executor.getBoundingBox().inflate(RELOAD_CAJAS_RADIUS);
+            cajas = level.getEntitiesOfClass(CajaEntity.class, area, c -> true);
+            herramientas = level.getEntitiesOfClass(CajaHerramientasEntity.class, area, c -> true);
+        }
+
+        cajas.forEach(CajaEntity::reset);
+        herramientas.forEach(CajaHerramientasEntity::reset);
+
+        int total = cajas.size() + herramientas.size();
+        GwwDebug.log(GwwDebug.Category.PUZZLE, "Reload: {} cajas cerradas ({})",
+                total, all ? "todo el mundo" : "radio " + RELOAD_CAJAS_RADIUS);
+        return total;
     }
 
     // ==================== ARENAS (config/GWW/config.yml) ====================

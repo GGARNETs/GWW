@@ -1,5 +1,6 @@
 package com.github.razorplay01.entity.custom;
 
+import com.github.razorplay01.instance.InstanceManager;
 import com.github.razorplay01.item.ModItems;
 import com.github.razorplay01.sound.ModSounds;
 import net.minecraft.core.HolderLookup;
@@ -148,7 +149,12 @@ public class CajaHerramientasEntity extends BaseEntity {
     }
 
     private void spawnBoxContents() {
-        if (this.level().isClientSide || boxContents.isEmpty()) {
+        if (this.level().isClientSide) {
+            return;
+        }
+        // Mismo criterio que CajaEntity: el yml se relee al abrir, no al montar la sala.
+        InstanceManager.applyCajaConfig(this);
+        if (boxContents.isEmpty()) {
             return;
         }
 

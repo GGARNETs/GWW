@@ -17,6 +17,7 @@ import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -274,12 +275,12 @@ public class InstanceManager {
 
         int cajasConfiguradas = 0;
         for (CajaEntity caja : level.getEntitiesOfClass(CajaEntity.class, room, c -> true)) {
-            if (applyCajaContents(caja.getCustomName(), caja::setBoxContents)) {
+            if (applyCajaConfig(caja)) {
                 cajasConfiguradas++;
             }
         }
         for (CajaHerramientasEntity caja : level.getEntitiesOfClass(CajaHerramientasEntity.class, room, c -> true)) {
-            if (applyCajaContents(caja.getCustomName(), caja::setBoxContents)) {
+            if (applyCajaConfig(caja)) {
                 cajasConfiguradas++;
             }
         }
@@ -289,8 +290,14 @@ public class InstanceManager {
         }
     }
 
-    private static boolean applyCajaContents(net.minecraft.network.chat.Component customName,
-                                             java.util.function.Consumer<List<net.minecraft.world.item.ItemStack>> setter) {
+    /**
+     * Le pone a la caja lo que puzzles.yml tenga para su nombre: sus items y, si el
+     * yml la menciona, la entidad que suelta al abrirse. Sin 'entidad:' en el yml la
+     * caja conserva la que trae en su NBT, así que llenar una caja vieja de items no
+     * le borra su manivela. Devuelve false si la caja no tiene nombre o no está en el yml.
+     */
+    public static boolean applyCajaConfig(Entity entity) {
+        Component customName = entity.getCustomName();
         if (customName == null) {
             return false;
         }
@@ -298,8 +305,20 @@ public class InstanceManager {
         if (!GwwPuzzles.hasCajaContenido(name)) {
             return false;
         }
-        setter.accept(GwwPuzzles.cajaContenido(name));
-        return true;
+
+        if (entity instanceof CajaEntity caja) {
+            caja.setBoxContents(GwwPuzzles.cajaContenido(name));
+            CompoundTag entidad = GwwPuzzles.cajaEntidad(name);
+            if (entidad != null) {
+                caja.setSpawnNbt(entidad);
+            }
+            return true;
+        }
+        if (entity instanceof CajaHerramientasEntity caja) {
+            caja.setBoxContents(GwwPuzzles.cajaContenido(name));
+            return true;
+        }
+        return false;
     }
 
     // ==================== RE-ENLAZADO DE PUZZLES ====================
