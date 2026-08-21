@@ -2,6 +2,7 @@ package com.github.razorplay01.command;
 
 import com.github.razorplay01.config.GwwPuzzles;
 import com.github.razorplay01.entity.custom.*;
+import com.github.razorplay01.item.ModComponents;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
@@ -18,6 +19,7 @@ import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -267,6 +269,15 @@ public class EscapeRoomConfigCommand {
                                                 .then(Commands.argument("nombre", StringArgumentType.word())
                                                         .executes(EscapeRoomConfigCommand::setCajaName)
                                                 )
+                                        )
+                                        .then(Commands.literal("apply")
+                                                .executes(EscapeRoomConfigCommand::applyCajaContenido)
+                                        )
+                                        .then(Commands.literal("reset")
+                                                .executes(EscapeRoomConfigCommand::resetCaja)
+                                        )
+                                        .then(Commands.literal("info")
+                                                .executes(EscapeRoomConfigCommand::infoCaja)
                                         )
                                 )
                         )
@@ -996,13 +1007,120 @@ public class EscapeRoomConfigCommand {
 
             if (GwwPuzzles.hasCajaContenido(nombre)) {
                 sendSuccess(context, "§a✓ Caja renombrada a '" + nombre
-                        + "'. §7puzzles.yml le pondrá su contenido en el próximo reset de la sala.");
+                        + "'. §7puzzles.yml le pondrá su contenido en el próximo reset de la sala,"
+                        + " o ya mismo con §f/escaperoom config caja <entidad> apply§7.");
             } else {
                 sendSuccess(context, "§a✓ Caja renombrada a '" + nombre + "'.\n"
                         + "§eAviso: puzzles.yml no tiene una entrada 'cajas." + nombre
                         + "'; hasta que la agregues conserva su contenido actual.");
             }
             return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Vuelca en la caja lo que puzzles.yml tenga para su nombre, sin esperar al
+     * reset de la sala: es lo que permite cambiarle el drop a una caja que ya está
+     * colocada en el mapa.
+     */
+    private static int applyCajaContenido(CommandContext<CommandSourceStack> context) {
+        try {
+            Entity entity = EntityArgument.getEntity(context, "caja");
+            String nombre = entity.getCustomName() == null ? null : entity.getCustomName().getString();
+
+            if (nombre == null) {
+                sendFailure(context, "§cEsa caja no tiene nombre. Pónselo primero con "
+                        + "/escaperoom config caja <entidad> setname <nombre>");
+                return 0;
+            }
+            if (!GwwPuzzles.hasCajaContenido(nombre)) {
+                sendFailure(context, "§cpuzzles.yml no tiene una entrada 'cajas." + nombre + "'.");
+                return 0;
+            }
+
+            List<ItemStack> contenido = GwwPuzzles.cajaContenido(nombre);
+            boolean abierta;
+            if (entity instanceof CajaEntity caja) {
+                caja.setBoxContents(contenido);
+                abierta = caja.isOpen();
+            } else if (entity instanceof CajaHerramientasEntity caja) {
+                caja.setBoxContents(contenido);
+                abierta = caja.isOpen();
+            } else {
+                sendFailure(context, "§cLa entidad debe ser una Caja o una Caja de Herramientas.");
+                return 0;
+            }
+
+            sendSuccess(context, "§a✓ '" + nombre + "' cargada con " + contenido.size()
+                    + " item(s) desde puzzles.yml.");
+            if (abierta) {
+                sendInfo(context, "§eEsta caja ya está abierta: usa "
+                        + "/escaperoom config caja <entidad> reset para volver a probarla.");
+            }
+            return contenido.size();
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    /** Cierra la caja y deja que vuelva a soltar su contenido, para probarla sin resetear la sala. */
+    private static int resetCaja(CommandContext<CommandSourceStack> context) {
+        try {
+            Entity entity = EntityArgument.getEntity(context, "caja");
+            if (entity instanceof CajaEntity caja) {
+                caja.reset();
+            } else if (entity instanceof CajaHerramientasEntity caja) {
+                caja.reset();
+            } else {
+                sendFailure(context, "§cLa entidad debe ser una Caja o una Caja de Herramientas.");
+                return 0;
+            }
+            sendSuccess(context, "§a✓ Caja cerrada: volverá a soltar su contenido al abrirse.");
+            return 1;
+        } catch (Exception e) {
+            sendFailure(context, "§cError: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    /** Qué va a soltar la caja cuando se abra: la entidad guardada en su NBT y sus items. */
+    private static int infoCaja(CommandContext<CommandSourceStack> context) {
+        try {
+            Entity entity = EntityArgument.getEntity(context, "caja");
+            String nombre = entity.getCustomName() == null ? "§7(sin nombre)" : entity.getCustomName().getString();
+
+            List<ItemStack> contenido;
+            String entidad = "§7ninguna";
+            boolean abierta;
+
+            if (entity instanceof CajaEntity caja) {
+                contenido = caja.getBoxContents();
+                abierta = caja.isOpen();
+                if (caja.getSpawnNbt().contains("id")) {
+                    entidad = caja.getSpawnNbt().getString("id");
+                }
+            } else if (entity instanceof CajaHerramientasEntity caja) {
+                contenido = caja.getBoxContents();
+                abierta = caja.isOpen();
+            } else {
+                sendFailure(context, "§cLa entidad debe ser una Caja o una Caja de Herramientas.");
+                return 0;
+            }
+
+            sendInfo(context, "§6=== Caja '" + nombre + "' ===");
+            sendInfo(context, "§7Estado: " + (abierta ? "§eabierta (ya soltó lo suyo)" : "§acerrada"));
+            sendInfo(context, "§7Entidad al abrirse: §f" + entidad);
+            sendInfo(context, "§7Items (" + contenido.size() + "):");
+            for (ItemStack stack : contenido) {
+                String comando = stack.get(ModComponents.PISTA_COMMAND);
+                sendInfo(context, "§8 - §f" + stack.getCount() + "x " + stack.getHoverName().getString()
+                        + (comando == null ? "" : " §7→ " + comando));
+            }
+            return contenido.size();
         } catch (Exception e) {
             sendFailure(context, "§cError: " + e.getMessage());
             return 0;

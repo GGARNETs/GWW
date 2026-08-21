@@ -178,14 +178,14 @@ public class CajaEntity extends BaseEntity {
     private void spawnBoxContents() {
         if (this.level().isClientSide) return;
 
+        // Entidad e items no se excluyen: una caja puede soltar la manivela y,
+        // junto a ella, la pista que dice qué hacer con esa manivela.
         if (!spawnNbt.isEmpty() && spawnNbt.contains("id")) {
             spawnSpecialEntity();
-            return;
         }
 
         if (!boxContents.isEmpty()) {
             spawnItemsFromList(boxContents);
-            return;
         }
     }
 

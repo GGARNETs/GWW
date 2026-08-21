@@ -1,8 +1,12 @@
 package com.github.razorplay01.config;
 
 import com.github.razorplay01.GWW;
+import com.github.razorplay01.item.ModComponents;
+import com.github.razorplay01.item.PistaItem;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -41,7 +45,15 @@ public class GwwPuzzles {
     private static int[] cablesRotaciones = null;
     private static int[] cablesTipos = null;
     private static int[] valvulasEstados = null;
-    private static Map<String, List<String>> cajasContenido = new LinkedHashMap<>();
+    private static Map<String, List<CajaItem>> cajasContenido = new LinkedHashMap<>();
+
+    /**
+     * Un item del contenido de una caja. Además del id lleva lo que necesita una
+     * hoja de pista para servir de pista: el nombre con el que se ve y el comando
+     * que dispara al usarla.
+     */
+    public record CajaItem(String id, int cantidad, String nombre, String comando) {
+    }
 
     private static final String DEFAULT_CONFIG = """
             # ============================================================
@@ -95,6 +107,17 @@ public class GwwPuzzles {
             #  # Repite un item para dar mas de uno.
             #  caja_taller: [alicate_cortacables, cable_lineal]
             #  caja_deposito: [llave_atico]
+            #
+            #  # Una caja que suelta una entidad (manivela, valvula) sigue soltandola:
+            #  # lo de aqui se suma a esa entidad, no la reemplaza.
+            #  # Para darle detalles a un item, escribelo como bloque:
+            #  caja_sotano:
+            #    - ganzua
+            #    - item: hoja_pista
+            #      nombre: "&ePista del sotano"
+            #      # Comando que ejecuta la hoja al click derecho (solo hoja_pista).
+            #      comando: "/mediaplayer show @s pista_sotano"
+            #      cantidad: 1
             """;
 
     public static Path getConfigFile() {
@@ -160,24 +183,14 @@ public class GwwPuzzles {
             }
 
             if (root.get("cajas") instanceof Map<?, ?> cajas) {
-                Map<String, List<String>> parsed = new LinkedHashMap<>();
+                Map<String, List<CajaItem>> parsed = new LinkedHashMap<>();
                 for (Map.Entry<?, ?> entry : cajas.entrySet()) {
                     String name = String.valueOf(entry.getKey());
                     if (!(entry.getValue() instanceof List<?> rawItems)) {
                         errors.add("puzzles.yml: la caja '" + name + "' debe ser una lista de items.");
                         continue;
                     }
-                    List<String> items = new ArrayList<>();
-                    for (Object raw : rawItems) {
-                        String id = String.valueOf(raw).trim().toLowerCase(Locale.ROOT);
-                        if (resolveItem(id) == null) {
-                            errors.add("puzzles.yml: la caja '" + name + "' tiene un item desconocido: '"
-                                    + id + "' (se ignora).");
-                        } else {
-                            items.add(id);
-                        }
-                    }
-                    parsed.put(name, items);
+                    parsed.put(name, cajaItems(name, rawItems, errors));
                 }
                 cajasContenido = parsed;
             }
@@ -264,6 +277,68 @@ public class GwwPuzzles {
         return result;
     }
 
+    /**
+     * Lee la lista de items de una caja. Cada entrada puede ser el id suelto
+     * ("ganzua") o un bloque con sus detalles, y un item con problemas se descarta
+     * solo: el resto de la caja se carga igual.
+     */
+    private static List<CajaItem> cajaItems(String caja, List<?> rawItems, List<String> errors) {
+        List<CajaItem> items = new ArrayList<>();
+        for (Object raw : rawItems) {
+            if (!(raw instanceof Map<?, ?> map)) {
+                String id = String.valueOf(raw).trim().toLowerCase(Locale.ROOT);
+                if (resolveItem(id) == null) {
+                    errors.add(unknownItem(caja, id));
+                } else {
+                    items.add(new CajaItem(id, 1, null, null));
+                }
+                continue;
+            }
+
+            Object rawId = map.get("item");
+            if (rawId == null) {
+                errors.add("puzzles.yml: la caja '" + caja + "' tiene una entrada sin 'item:' (se ignora).");
+                continue;
+            }
+            String id = String.valueOf(rawId).trim().toLowerCase(Locale.ROOT);
+            Item item = resolveItem(id);
+            if (item == null) {
+                errors.add(unknownItem(caja, id));
+                continue;
+            }
+
+            int cantidad = 1;
+            Object rawCantidad = map.get("cantidad");
+            if (rawCantidad instanceof Number number) {
+                cantidad = Math.max(1, Math.min(number.intValue(), new ItemStack(item).getMaxStackSize()));
+            } else if (rawCantidad != null) {
+                errors.add("puzzles.yml: la caja '" + caja + "', item '" + id
+                        + "': 'cantidad' debe ser un numero (se usa 1).");
+            }
+
+            String comando = map.get("comando") == null ? null : String.valueOf(map.get("comando")).trim();
+            if (comando != null && !comando.isEmpty() && !(item instanceof PistaItem)) {
+                errors.add("puzzles.yml: la caja '" + caja + "', item '" + id
+                        + "': solo hoja_pista ejecuta un 'comando' (se ignora).");
+                comando = null;
+            }
+
+            String nombre = map.get("nombre") == null ? null : String.valueOf(map.get("nombre"));
+            items.add(new CajaItem(id, cantidad, nombre, comando));
+        }
+        return items;
+    }
+
+    private static String unknownItem(String caja, String id) {
+        return "puzzles.yml: la caja '" + caja + "' tiene un item desconocido: '" + id + "' (se ignora).";
+    }
+
+    /** Texto del yml a Component: acepta códigos de color con & y sale sin cursiva. */
+    private static Component colored(String text) {
+        return Component.literal(text.replace('&', '§'))
+                .withStyle(style -> style.withItalic(false));
+    }
+
     /** Nombre de color → tipo de fusible (1..5), o 0 si no existe. */
     public static int parseFuseName(String name) {
         String clean = name.trim().toLowerCase(Locale.ROOT);
@@ -343,15 +418,23 @@ public class GwwPuzzles {
     /** Contenido configurado para la caja, ya convertido a stacks (uno por entrada). */
     public static synchronized List<ItemStack> cajaContenido(String name) {
         List<ItemStack> stacks = new ArrayList<>();
-        List<String> ids = cajasContenido.get(name);
-        if (ids == null) {
+        List<CajaItem> items = cajasContenido.get(name);
+        if (items == null) {
             return stacks;
         }
-        for (String id : ids) {
-            Item item = resolveItem(id);
-            if (item != null) {
-                stacks.add(new ItemStack(item));
+        for (CajaItem entry : items) {
+            Item item = resolveItem(entry.id());
+            if (item == null) {
+                continue;
             }
+            ItemStack stack = new ItemStack(item, entry.cantidad());
+            if (entry.comando() != null && !entry.comando().isEmpty()) {
+                stack.set(ModComponents.PISTA_COMMAND, entry.comando());
+            }
+            if (entry.nombre() != null && !entry.nombre().isEmpty()) {
+                stack.set(DataComponents.CUSTOM_NAME, colored(entry.nombre()));
+            }
+            stacks.add(stack);
         }
         return stacks;
     }
