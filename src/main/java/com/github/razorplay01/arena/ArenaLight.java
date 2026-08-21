@@ -1,11 +1,16 @@
 package com.github.razorplay01.arena;
 
+import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.InterruptorIndustrialEntity;
+import com.github.razorplay01.entity.custom.PanelCodigoEntity;
 import com.github.razorplay01.entity.custom.PanelEnergiaEntity;
+import com.github.razorplay01.entity.custom.PanelTecladoEntity;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+
+import java.util.List;
 
 /**
  * La "luz" de una arena: visión nocturna para los jugadores que hay dentro mientras
@@ -59,6 +64,25 @@ public final class ArenaLight {
             } else {
                 remove(player);
             }
+        }
+        powerPanels(level, arena, on);
+    }
+
+    /**
+     * Los paneles de código y los teclados de la sala siguen a la luz: sin energía
+     * quedan apagados y sin números, sin necesidad de vincularlos a mano al
+     * interruptor. Se llama solo cuando la luz cambia de verdad, nunca por tick.
+     */
+    public static void powerPanels(Level level, Arena arena, boolean on) {
+        List<PanelCodigoEntity> panels = level.getEntitiesOfClass(
+                PanelCodigoEntity.class, arena.getZoneAABB(), p -> p.isPowered() != on);
+        panels.forEach(p -> p.setPowered(on));
+        List<PanelTecladoEntity> teclados = level.getEntitiesOfClass(
+                PanelTecladoEntity.class, arena.getZoneAABB(), t -> t.isPowered() != on);
+        teclados.forEach(t -> t.setPowered(on));
+        if (!panels.isEmpty() || !teclados.isEmpty()) {
+            GwwDebug.log(GwwDebug.Category.PUZZLE, "Luz {}: {} panel(es) de codigo y {} teclado(s) {}",
+                    on ? "ON" : "OFF", panels.size(), teclados.size(), on ? "encendidos" : "apagados");
         }
     }
 }

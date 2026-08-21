@@ -131,6 +131,24 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
     }
 
     /**
+     * Verificación al hacer clic: además del flag sincronizado, se consulta la luz
+     * REAL de la sala. Si el flag quedó desactualizado, se corrige aquí mismo: sin
+     * energía el panel nunca responde.
+     */
+    private boolean checkPoweredLive() {
+        com.github.razorplay01.arena.Arena arena =
+                com.github.razorplay01.arena.ArenaManager.getArenaAt(this.position());
+        if (arena != null) {
+            boolean lightOn = com.github.razorplay01.arena.ArenaLight.isOn(this.level(), arena);
+            if (lightOn != isPowered()) {
+                setPowered(lightOn);
+            }
+            return lightOn;
+        }
+        return isPowered();
+    }
+
+    /**
      * Traduce una secuencia guardada con los nombres viejos. Se hace en una sola
      * pasada: si se aplicara en cadena, el "circulo" convertido en "hexagono" se
      * volvería a convertir en "pentagono".
@@ -266,7 +284,7 @@ public class PanelCodigoEntity extends BaseEntity implements GeckoLibMultiPartEn
         if (hand != InteractionHand.MAIN_HAND || this.level().isClientSide || player.isSpectator()) {
             return InteractionResult.PASS;
         }
-        if (!isPowered()) {
+        if (!checkPoweredLive()) {
             ModSounds.playAt(this, ModSounds.PANEL_OFF, 0.7F, 1.0F);
             player.displayClientMessage(Component.literal("§cEl panel está apagado."), true);
             return InteractionResult.PASS;

@@ -4,6 +4,9 @@ import com.github.darkpred.morehitboxes.api.EntityHitboxData;
 import com.github.darkpred.morehitboxes.api.EntityHitboxDataFactory;
 import com.github.darkpred.morehitboxes.api.GeckoLibMultiPartEntity;
 import com.github.darkpred.morehitboxes.api.MultiPart;
+import com.github.razorplay01.arena.Arena;
+import com.github.razorplay01.arena.ArenaLight;
+import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.config.GwwPuzzles;
 import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.util.MultiPartHitboxes;
@@ -61,8 +64,10 @@ public class PanelTecladoEntity extends BaseEntity implements GeckoLibMultiPartE
             SynchedEntityData.defineId(PanelTecladoEntity.class, EntityDataSerializers.BOOLEAN);
 
     /**
-     * Encendido por defecto: el teclado del ático no cuelga de ningún interruptor.
-     * Si se vincula a un interruptor industrial, este manda sobre el estado.
+     * Dentro de una arena manda la LUZ real de la sala (ArenaLight: interruptor +
+     * panel de energía), sin vínculos manuales: se sincroniza al cambiar la luz, al
+     * pegar la sala y como verificación al hacer clic. Fuera de arena queda
+     * encendido por defecto, salvo que un interruptor vinculado diga lo contrario.
      */
     private static final EntityDataAccessor<Boolean> POWERED =
             SynchedEntityData.defineId(PanelTecladoEntity.class, EntityDataSerializers.BOOLEAN);
@@ -111,6 +116,26 @@ public class PanelTecladoEntity extends BaseEntity implements GeckoLibMultiPartE
 
     public boolean isPowered() {
         return this.entityData.get(POWERED);
+    }
+
+    /**
+     * Verificación al hacer clic: además del flag sincronizado, se consulta la luz
+     * REAL de la sala. Si el flag quedó desactualizado (sala pegada con NBT viejo,
+     * enlaces rotos), se corrige aquí mismo: sin energía nunca se puede teclear.
+     */
+    private boolean checkPoweredLive() {
+        Arena arena = ArenaManager.getArenaAt(this.position());
+        if (arena != null) {
+            boolean lightOn = ArenaLight.isOn(this.level(), arena);
+            if (lightOn != isPowered()) {
+                GwwDebug.log(GwwDebug.Category.PUZZLE,
+                        "Teclado '{}' con estado desactualizado: la luz de la sala esta {}",
+                        getTecladoName(), lightOn ? "ON" : "OFF");
+                setPowered(lightOn);
+            }
+            return lightOn;
+        }
+        return isPowered();
     }
 
     public void setPowered(boolean powered) {
@@ -228,7 +253,7 @@ public class PanelTecladoEntity extends BaseEntity implements GeckoLibMultiPartE
         if (hand != InteractionHand.MAIN_HAND || this.level().isClientSide || player.isSpectator()) {
             return InteractionResult.PASS;
         }
-        if (!isPowered()) {
+        if (!checkPoweredLive()) {
             ModSounds.playAt(this, ModSounds.PANEL_OFF, 0.7F, 1.0F);
             player.displayClientMessage(Component.literal("§cEl teclado está apagado."), true);
             return InteractionResult.PASS;

@@ -1,6 +1,9 @@
 package com.github.razorplay01.instance;
 
 import com.github.razorplay01.GWW;
+import com.github.razorplay01.arena.Arena;
+import com.github.razorplay01.arena.ArenaLight;
+import com.github.razorplay01.arena.ArenaManager;
 import com.github.razorplay01.config.GwwPuzzles;
 import com.github.razorplay01.debug.GwwDebug;
 import com.github.razorplay01.entity.custom.*;
@@ -363,6 +366,25 @@ public class InstanceManager {
                     panel.setPowered(true);
                 }
             }
+        }
+
+        // La luz real de la sala manda sobre cualquier NBT guardado o vínculo: una
+        // sala pegada a oscuras arranca con todos sus paneles y teclados apagados.
+        Map<Arena, Boolean> luzPorArena = new java.util.HashMap<>();
+        for (PanelCodigoEntity panel : allPanels) {
+            applyLightPower(level, panel.position(), luzPorArena, panel::setPowered);
+        }
+        for (PanelTecladoEntity teclado : allTeclados) {
+            applyLightPower(level, teclado.position(), luzPorArena, teclado::setPowered);
+        }
+    }
+
+    /** Aplica al panel la luz de su arena (cacheada por sala); fuera de arena no toca nada. */
+    private static void applyLightPower(ServerLevel level, Vec3 pos, Map<Arena, Boolean> cache,
+                                        java.util.function.Consumer<Boolean> setPowered) {
+        Arena arena = ArenaManager.getArenaAt(pos);
+        if (arena != null) {
+            setPowered.accept(cache.computeIfAbsent(arena, a -> ArenaLight.isOn(level, a)));
         }
     }
 
